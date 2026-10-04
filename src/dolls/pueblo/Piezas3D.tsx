@@ -3,8 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CanvasTexture, DoubleSide, SRGBColorSpace } from 'three'
 import type { Group, Mesh, MeshBasicMaterial } from 'three'
 import { motionById } from '../animations'
+import type { Motion } from '../animations'
 import { DollBody } from '../DollBody'
 import type { BattleCard } from '../cards/model'
+import { movimientoDeDibujo } from '../game/animacionDibujada'
+import type { FichaDeBuscado } from '../game/ranking'
 
 /**
  * **Las piezas hechas a mano del pueblo y del desierto**: el vaquero que manejas, la gente que hay
@@ -454,6 +457,216 @@ export function MarcaDeDestino({ destino }: { destino: { current: { x: number; z
         <circleGeometry args={[0.18, 16]} />
         <meshBasicMaterial color="#fde047" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
       </mesh>
+    </group>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Los Más Buscados: la tarima de la plaza con los cinco mejores
+// ---------------------------------------------------------------------------
+
+/** Lo alto que es la tarima. */
+const TARIMA = 0.35
+
+/** Cada puesto de la tarima: donde va, lo alto de su pedestal, su color y lo grande del muñeco. */
+const PUESTOS = [
+  { puesto: 1, x: 0, alto: 0.8, color: '#d4a017', escala: 1.12 },
+  { puesto: 2, x: -1.9, alto: 0.52, color: '#b8c0c8', escala: 1 },
+  { puesto: 3, x: 1.9, alto: 0.52, color: '#b0703a', escala: 1 },
+  { puesto: 4, x: -3.75, alto: 0.28, color: '#7a4a26', escala: 0.95 },
+  { puesto: 5, x: 3.75, alto: 0.28, color: '#7a4a26', escala: 0.95 },
+] as const
+
+/** El cartel de SE BUSCA de un puesto: su número, su nombre, su rango y lo que vale su cabeza. */
+function useCartelDelBuscado(puesto: number, nombre: string | null, rango: string, monedas: number) {
+  return useTextura(
+    256,
+    340,
+    (c) => {
+      papelViejo(c, 256, 340)
+      c.textAlign = 'center'
+      c.fillStyle = '#2a1a10'
+      c.font = '42px Rye, Georgia, serif'
+      c.fillText('SE BUSCA', 128, 58)
+      c.font = 'bold 15px Georgia, serif'
+      c.fillText(nombre ? 'VIVO O MUERTO' : 'SE ADMITEN CANDIDATOS', 128, 82)
+      // El número del puesto, como un sello rojo.
+      c.save()
+      c.translate(128, 150)
+      c.rotate(-0.12)
+      c.strokeStyle = '#9f1d1d'
+      c.lineWidth = 6
+      c.beginPath()
+      c.arc(0, 0, 50, 0, Math.PI * 2)
+      c.stroke()
+      c.fillStyle = '#9f1d1d'
+      c.font = '62px Rye, Georgia, serif'
+      c.textBaseline = 'middle'
+      c.fillText(nombre ? `Nº${puesto}` : '?', 0, 4)
+      c.restore()
+      c.fillStyle = '#2a1a10'
+      const texto = (nombre ?? '¿Tú?').toUpperCase().slice(0, 14)
+      c.font = `${texto.length > 9 ? 24 : 32}px Rye, Georgia, serif`
+      c.fillText(texto, 128, 240)
+      c.font = 'bold 18px Georgia, serif'
+      c.fillStyle = '#5b3a1c'
+      c.fillText(nombre ? rango : 'Juega partidas de rango', 128, 270)
+      c.fillStyle = '#7a2d0c'
+      c.font = 'bold 24px Georgia, serif'
+      c.fillText(nombre ? `${monedas} MONEDAS` : 'SITIO LIBRE', 128, 306)
+    },
+    [puesto, nombre, rango, monedas],
+  )
+}
+
+/** La chapa con el número en el pedestal. */
+function useChapa(puesto: number) {
+  return useTextura(
+    128,
+    128,
+    (c) => {
+      c.fillStyle = '#1a0f06'
+      c.beginPath()
+      c.arc(64, 64, 62, 0, Math.PI * 2)
+      c.fill()
+      c.fillStyle = '#fde68a'
+      c.font = '78px Rye, Georgia, serif'
+      c.textAlign = 'center'
+      c.textBaseline = 'middle'
+      c.fillText(String(puesto), 64, 70)
+    },
+    [puesto],
+  )
+}
+
+/** La corona dorada que flota y gira encima del número uno. */
+function Corona({ y }: { y: number }) {
+  const g = useRef<Group>(null)
+  useFrame((state) => {
+    if (!g.current) return
+    g.current.rotation.y = state.clock.elapsedTime * 1.2
+    g.current.position.y = y + Math.sin(state.clock.elapsedTime * 2) * 0.08
+  })
+  return (
+    <group ref={g} position={[0, y, 0]}>
+      <mesh>
+        <cylinderGeometry args={[0.32, 0.28, 0.2, 18, 1, true]} />
+        <meshStandardMaterial color="#facc15" metalness={0.8} roughness={0.25} emissive="#7a5200" side={DoubleSide} />
+      </mesh>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const a = (i / 5) * Math.PI * 2
+        return (
+          <mesh key={i} position={[Math.cos(a) * 0.3, 0.2, Math.sin(a) * 0.3]}>
+            <coneGeometry args={[0.07, 0.22, 6]} />
+            <meshStandardMaterial color="#facc15" metalness={0.8} roughness={0.25} emissive="#7a5200" />
+          </mesh>
+        )
+      })}
+      <mesh position={[0, 0.02, 0.29]}>
+        <sphereGeometry args={[0.05, 10, 8]} />
+        <meshBasicMaterial color="#ef4444" />
+      </mesh>
+    </group>
+  )
+}
+
+/** El muñeco de un buscado: hace su animación dibujada (si tiene) o se queda en su pose. */
+function MunecoBuscado({ ficha, escala }: { ficha: FichaDeBuscado; escala: number }) {
+  const motion: Motion = useMemo(() => (ficha.animacion ? movimientoDeDibujo(ficha.animacion, true) : QUIETO), [ficha.animacion])
+  return <DollBody look={ficha.look} motion={motion} playing scale={ESCALA_MUNECO * escala} />
+}
+
+function Puesto({ sitio, ficha }: { sitio: (typeof PUESTOS)[number]; ficha: FichaDeBuscado | undefined }) {
+  const cartel = useCartelDelBuscado(sitio.puesto, ficha?.nombre ?? null, ficha ? `${ficha.rango.icon} ${ficha.rango.label}` : '', ficha?.monedas ?? 0)
+  const chapa = useChapa(sitio.puesto)
+  const arriba = TARIMA + sitio.alto
+  // Los carteles van en lo alto de la pared, por encima de los sombreros (el nº1, más arriba).
+  const cartelY = sitio.puesto === 1 ? 5.15 : 4.75
+  const metal = sitio.puesto <= 3
+  return (
+    <group position={[sitio.x, 0, 0]}>
+      {/* El pedestal, con su chapa delante */}
+      <mesh position={[0, TARIMA + sitio.alto / 2, 0.1]}>
+        <cylinderGeometry args={[0.66, 0.74, sitio.alto, 24]} />
+        {metal ? (
+          <meshStandardMaterial color={sitio.color} metalness={0.65} roughness={0.35} />
+        ) : (
+          <meshLambertMaterial color={sitio.color} />
+        )}
+      </mesh>
+      <mesh position={[0, TARIMA + sitio.alto / 2, 0.85]}>
+        <circleGeometry args={[Math.min(0.2, sitio.alto * 0.42), 20]} />
+        <meshBasicMaterial map={chapa} toneMapped={false} />
+      </mesh>
+      {/* El cartel de SE BUSCA, clavado en la pared de detrás */}
+      <mesh position={[0, cartelY, -1.08]} rotation={[0, 0, sitio.puesto % 2 === 0 ? 0.03 : -0.03]}>
+        <planeGeometry args={[1.3, 1.73]} />
+        <meshBasicMaterial map={cartel} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, cartelY + 0.78, -1.06]}>
+        <circleGeometry args={[0.05, 10]} />
+        <meshBasicMaterial color="#b91c1c" />
+      </mesh>
+      {sitio.puesto === 1 && ficha && <Corona y={cartelY + 1.15} />}
+      {/* El muñeco, encima de su pedestal */}
+      {ficha && (
+        <group position={[0, arriba, 0.1]}>
+          <Sombra r={0.55} />
+          <MunecoBuscado ficha={ficha} escala={sitio.escala} />
+        </group>
+      )}
+    </group>
+  )
+}
+
+/**
+ * **La tarima de Los Más Buscados**, en medio de la plaza: una pared de tablas con el letrero, cinco
+ * pedestales (oro, plata, bronce y dos de madera) y encima de cada uno el muñeco del jugador tal y
+ * como va vestido, con su cartel de SE BUSCA detrás. Los huecos que falten esperan candidato.
+ */
+export function SalonDeLosBuscados({ x, z, fichas }: { x: number; z: number; fichas: FichaDeBuscado[] }) {
+  const letrero = useLetrero('LOS MÁS BUSCADOS', 1024, 150)
+  return (
+    <group position={[x, 0, z]}>
+      {/* La tarima y su escalón */}
+      <mesh position={[0, TARIMA / 2, 0]}>
+        <boxGeometry args={[9.6, TARIMA, 2.6]} />
+        <meshLambertMaterial color={maderaClara} />
+      </mesh>
+      <mesh position={[0, TARIMA / 4, 1.5]}>
+        <boxGeometry args={[3.2, TARIMA / 2, 0.5]} />
+        <meshLambertMaterial color={madera} />
+      </mesh>
+      {/* La pared de tablas */}
+      <mesh position={[0, TARIMA + 3, -1.2]}>
+        <boxGeometry args={[9.6, 6, 0.18]} />
+        <meshLambertMaterial color="#5c3a1c" />
+      </mesh>
+      {[-2, -0.5, 1, 2.5].map((y) => (
+        <mesh key={y} position={[0, TARIMA + 3 + y, -1.1]}>
+          <boxGeometry args={[9.6, 0.05, 0.02]} />
+          <meshLambertMaterial color="#3b2410" />
+        </mesh>
+      ))}
+      {/* Los postes y el tejadillo */}
+      {[-4.85, 4.85].map((px) => (
+        <mesh key={px} position={[px, 3.45, -1.1]}>
+          <boxGeometry args={[0.26, 6.9, 0.26]} />
+          <meshLambertMaterial color={madera} />
+        </mesh>
+      ))}
+      <mesh position={[0, 6.95, -0.75]} rotation={[0.32, 0, 0]}>
+        <boxGeometry args={[10.4, 0.14, 1.3]} />
+        <meshLambertMaterial color="#4a2c14" />
+      </mesh>
+      {/* El letrero de arriba */}
+      <mesh position={[0, 7.8, -0.95]}>
+        <planeGeometry args={[7.6, 7.6 * (150 / 1024)]} />
+        <meshBasicMaterial map={letrero} toneMapped={false} side={DoubleSide} />
+      </mesh>
+      {PUESTOS.map((sitio) => (
+        <Puesto key={sitio.puesto} sitio={sitio} ficha={fichas[sitio.puesto - 1]} />
+      ))}
     </group>
   )
 }

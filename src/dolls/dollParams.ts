@@ -314,8 +314,8 @@ export function isLook(value: unknown): value is Partial<DollLook> {
 // Sorpréndeme: un muñeco al azar, a veces con proporciones exageradas
 // ---------------------------------------------------------------------------
 
-const SKINS = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac', '#f3d1b5', '#d99a6c', '#cfd8c8', '#9fc26b']
-const HAIRS = ['#111111', '#4a2c17', '#8d5524', '#d9d9d9', '#e8c170', '#b23a1a', '#ffffff']
+export const SKINS = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac', '#f3d1b5', '#d99a6c', '#cfd8c8', '#9fc26b']
+export const HAIRS = ['#111111', '#4a2c17', '#8d5524', '#d9d9d9', '#e8c170', '#b23a1a', '#ffffff']
 
 function hslHex(h: number, s: number, l: number): string {
   const k = (n: number) => (n + h * 12) % 12

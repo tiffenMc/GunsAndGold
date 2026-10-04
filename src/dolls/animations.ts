@@ -102,7 +102,7 @@ const REST_BONES: Record<string, Triple> = {
   kneeR: [4, 0, 0],
 }
 
-const REST: Pose = { bones: REST_BONES }
+export const REST: Pose = { bones: REST_BONES }
 
 /** Pose de carta: de pie con la mano en el cinturon. */
 export const POSE_CARTA: Pose = {

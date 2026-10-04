@@ -1,0 +1,13 @@
+// La web del juego en Cloudflare: los archivos de `dist/` (lo que saca `npm run build`), servidos
+// tal cual. Cada rama de GitHub tiene su propio enlace de prueba; `main` es la versión oficial.
+// Más adelante, aquí se añadirá el servidor de las partidas (Durable Objects).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gunsandgold",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Una dirección que no existe (p. ej. /pueblo) abre el juego en vez de un error.
+    "not_found_handling": "single-page-application"
+  }
+}

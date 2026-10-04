@@ -8,6 +8,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { Icono } from '../Icono'
 import { EVENTO_ANDA } from '../tutorial/TourDeMenus'
 import type { BattleCard } from '../cards/model'
+import type { FichaDeBuscado } from '../game/ranking'
 import { Model } from '../scenes/models'
 import { fundirDecorado } from '../scenes/Scenery'
 import { MUNDOS, dondeSePuede, guardarPosicion, posicionGuardada } from './lugares'
@@ -19,6 +20,7 @@ import {
   MarcaDeDestino,
   MunecoQueAnda,
   RodadoraDeLaCalle,
+  SalonDeLosBuscados,
   Sombra,
   TablonDeAnuncios,
   TablonDelCanon,
@@ -52,6 +54,8 @@ export interface MundoProps {
   tablon?: { nombre: string; recompensa: string; encargos: { texto: string; hecho: boolean }[] }
   /** Los nombres de las cartas de las cinco incursiones (en el tablón del cañón). */
   carteles?: string[]
+  /** Los cinco mejores, para la tarima de Los Más Buscados de la plaza. */
+  buscados?: FichaDeBuscado[]
   onEntrar: (zona: Zona) => void
   /** Lo que va encima (la barra de arriba). */
   children?: ReactNode
@@ -209,7 +213,9 @@ export function MundoScreen(props: MundoProps) {
 function nombreCorto(sitio: Sitio): string {
   const nombres: Record<Zona, string> = {
     tablon: 'Tablón',
+    ranking: 'Buscados',
     bar: 'Bar',
+    sastreria: 'Sastre',
     saloon: 'Saloon',
     sheriff: 'Sheriff',
     diligencia: sitio.icono === 'pueblo' ? 'Al pueblo' : 'Desierto',
@@ -310,19 +316,21 @@ function Decorado({ mundo, onListo }: { mundo: Mundo; onListo: () => void }) {
 
 /** Lo hecho a mano de cada mundo: tablón, letreros, dianas, banderas… y la gente. */
 function Extras(props: MundoProps & { mundo: Mundo }) {
-  const { mundo, vecinos, tablon, carteles } = props
+  const { mundo, vecinos, tablon, carteles, buscados } = props
   const v = (i: number) => vecinos[i % Math.max(1, vecinos.length)]
   if (mundo.lugar === 'pueblo') {
     return (
       <>
-        {tablon && <TablonDeAnuncios x={0} z={0} nombre={tablon.nombre} recompensa={tablon.recompensa} encargos={tablon.encargos} />}
+        {tablon && <TablonDeAnuncios x={-6.8} z={0} nombre={tablon.nombre} recompensa={tablon.recompensa} encargos={tablon.encargos} />}
+        <SalonDeLosBuscados x={0} z={-0.6} fichas={buscados ?? []} />
         <Letrero x={-15} z={-0.3} texto="BAR" ancho={5} y={6.9} postes={false} />
+        <Letrero x={-24} z={-0.85} texto="SASTRERÍA" ancho={4.6} y={4.4} postes={false} />
         <Letrero x={-32.3} z={-0.85} texto="SHERIFF" ancho={4.2} y={4.3} postes={false} />
         <Letrero x={36.6} z={1.4} texto="DESIERTO" ancho={4} y={2.6} />
         <RodadoraDeLaCalle desde={mundo.limites.x[0] - 6} hasta={mundo.limites.x[1] + 6} />
         {vecinos.length > 0 && (
           <>
-            <Vecino card={v(0)!} x={-10.6} z={1.1} giro={-0.4} />
+            <Vecino card={v(0)!} x={-11.3} z={1.6} giro={-0.4} />
             <Vecino card={v(1)!} x={-28.4} z={1.2} giro={-0.3} />
             <Vecino card={v(2)!} x={10.4} z={1.2} giro={0.4} />
             <Vecino card={v(3)!} x={34} z={3.4} giro={0.6} />
