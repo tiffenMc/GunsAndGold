@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.log
+coverage
+
+# Packs Synty originales (300+ MB). Los modelos usados van convertidos en public/escenarios
+# (se regeneran con: node scripts/obj2glb.mjs)
+Assets/

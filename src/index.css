@@ -1,0 +1,1324 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 50% -10%, #4a2c14 0%, rgba(12, 8, 4, 0) 55%),
+    radial-gradient(circle at 85% 110%, #3a1d10 0%, rgba(12, 8, 4, 0) 50%),
+    #0c0804;
+  color: #f3e6cf;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Movil: deja libres la franja del notch y la barra de gestos. */
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border-2 border-amber-950/70 bg-gradient-to-b from-[#3a2413]/95 to-[#22140a]/95 shadow-[0_18px_40px_-20px_rgba(0,0,0,0.95)];
+  }
+
+  .btn {
+    @apply rounded-xl px-4 py-2 font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply rounded-xl px-4 py-2 font-semibold uppercase tracking-wider transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 border border-amber-200/70 bg-gradient-to-b from-amber-400 to-amber-700 text-amber-950 shadow-[0_0_22px_rgba(224,180,99,0.35)] hover:from-amber-300 hover:to-amber-600;
+  }
+
+  .btn-ghost {
+    @apply rounded-xl px-4 py-2 font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 border border-amber-300/30 bg-[#2a1a0e]/70 text-amber-100 hover:bg-[#3a2413];
+  }
+
+  .panel-wood {
+    @apply rounded-2xl border-2 border-amber-950/80 bg-gradient-to-b from-[#3a2413]/95 to-[#22140a]/95 shadow-[0_18px_40px_-20px_rgba(0,0,0,0.95)] backdrop-blur;
+  }
+
+  .btn-gold {
+    @apply rounded-xl px-4 py-2 font-semibold uppercase tracking-wider transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 border border-amber-200/70 bg-gradient-to-b from-amber-400 to-amber-700 text-amber-950 shadow-[0_0_22px_rgba(224,180,99,0.35)] hover:from-amber-300 hover:to-amber-600;
+  }
+
+  .chip-wood {
+    @apply rounded-full border border-amber-300/40 bg-[#2a1a0e]/85 text-amber-100 backdrop-blur;
+  }
+}
+
+@keyframes card-sheen {
+  0% {
+    transform: translate(-70%, -20%) rotate(14deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(160%, 20%) rotate(14deg);
+    opacity: 0;
+  }
+}
+
+.card-sheen {
+  animation: card-sheen 4s ease-in-out infinite;
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(0.9);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-64px) scale(1.15);
+    opacity: 0;
+  }
+}
+
+.float-up {
+  animation: float-up 1.1s ease-out forwards;
+}
+
+@keyframes assault-pop {
+  0% {
+    transform: scale(0.55) rotate(-5deg);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.14) rotate(1.5deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1) rotate(0deg);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.06);
+    opacity: 0;
+  }
+}
+
+.assault-pop {
+  animation: assault-pop 2.4s ease-out forwards;
+}
+
+@keyframes tower-hit {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  80% {
+    transform: translateX(-3px);
+  }
+}
+
+.tower-hit {
+  animation: tower-hit 380ms ease-in-out;
+}
+
+/* ---------------------------------------------------------------------------
+   Marcos de las cartas: cada rareza lleva el suyo. Solo por el borde se sabe
+   si la carta es normal, especial, epica o divina.
+   --------------------------------------------------------------------------- */
+
+@keyframes frame-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes frame-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes frame-gem {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: rotate(45deg) scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.14);
+  }
+}
+
+/* El halo sale por fuera del marco: vive en la capa de fuera, que no recorta nada. */
+.card-frame::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 22px;
+  background: radial-gradient(closest-side, var(--frame-glow), transparent 76%);
+  pointer-events: none;
+}
+
+.card-frame[data-rarity='epica']::before {
+  animation: frame-breathe 3.4s ease-in-out infinite;
+}
+
+.card-frame[data-rarity='divina']::before {
+  animation: frame-breathe 2.2s ease-in-out infinite;
+}
+
+/* La cinta de oro que gira dentro del marco de las divinas. */
+.card-cinta {
+  position: absolute;
+  inset: -65%;
+  background: conic-gradient(from 0deg, #7c4a03, #ffe9a8, #f59e0b, #fffbeb, #b45309, #ffe9a8, #7c4a03);
+  animation: frame-spin 7s linear infinite;
+}
+
+.card-gema {
+  animation: frame-gem 1.9s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   Los bocadillos de comic de las cartas: papel crema, borde gordo y cola.
+   --------------------------------------------------------------------------- */
+
+@keyframes globo-pop {
+  0% {
+    transform: scale(0.3) rotate(-6deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.08) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-1.5deg);
+    opacity: 1;
+  }
+}
+
+/* Se ve el campo a traves del papel: el bocadillo acompaña, no tapa la partida. */
+.globo-comic {
+  position: relative;
+  max-width: 148px;
+  padding: 5px 8px 4px;
+  border: 2px solid rgba(26, 13, 4, 0.85);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 250, 240, 0.72), rgba(240, 226, 196, 0.66));
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  animation: globo-pop 320ms cubic-bezier(0.2, 1.5, 0.5, 1) both;
+}
+
+.globo-comic__texto {
+  margin: 0;
+  font-family: 'Rye', Georgia, serif;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+  color: #24140a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* La cola del bocadillo, apuntando al muñeco. */
+.globo-comic__cola {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 0;
+  height: 0;
+  margin-left: -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid rgba(26, 13, 4, 0.85);
+}
+
+.globo-comic__cola::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -9px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid rgba(245, 233, 207, 0.75);
+}
+
+/* Los tuyos van con el papel crema y los del rival con un tono más sucio y rojizo. */
+.globo-comic--rival {
+  background: linear-gradient(180deg, rgba(246, 227, 214, 0.72), rgba(226, 195, 178, 0.66));
+}
+
+.globo-comic--rival .globo-comic__texto {
+  color: #3a1410;
+}
+
+/* ---------------------------------------------------------------------------
+   La barra de volumen de los ajustes: carril de madera y bola de laton.
+   --------------------------------------------------------------------------- */
+
+.slider-oeste {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.slider-oeste::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(224, 180, 99, 0.45);
+  background: linear-gradient(180deg, #1a0f06, #3a2211);
+}
+
+.slider-oeste::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid #3b2410;
+  background: radial-gradient(circle at 34% 28%, #fff3d6, #e0b463 55%, #7c4a03);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.7);
+}
+
+.slider-oeste::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(224, 180, 99, 0.45);
+  background: linear-gradient(180deg, #1a0f06, #3a2211);
+}
+
+.slider-oeste::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #3b2410;
+  background: radial-gradient(circle at 34% 28%, #fff3d6, #e0b463 55%, #7c4a03);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.7);
+}
+
+.slider-oeste:focus-visible {
+  outline: 2px solid rgba(224, 180, 99, 0.8);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------------
+   La cara nueva del juego: papel de cartel, tinta y sellos. Menos madera y
+   menos texto: paneles de papel, botones gordos y chapas.
+   --------------------------------------------------------------------------- */
+
+.papel {
+  position: relative;
+  border-radius: 14px;
+  border: 2px solid #2a1a10;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.65), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(120, 72, 32, 0.22), transparent 55%),
+    linear-gradient(170deg, #f6e8c8, #e6d2a6 60%, #d8c091);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(120, 72, 32, 0.25);
+  color: #2a1a10;
+}
+
+.papel-oscuro {
+  border-radius: 14px;
+  border: 2px solid #2a1a10;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 220, 150, 0.12), transparent 60%),
+    linear-gradient(180deg, #2a1a10, #1a0f08);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* El botón gordo de la interfaz nueva: como un sello. */
+.boton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 14px;
+  border: 2px solid #2a1a10;
+  padding: 10px 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2a1a10;
+  background: linear-gradient(180deg, #f7d98a, #d9a53c 70%, #b8801f);
+  box-shadow: 0 5px 0 #2a1a10, 0 10px 18px rgba(0, 0, 0, 0.45);
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.boton:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #2a1a10, 0 6px 12px rgba(0, 0, 0, 0.45);
+}
+
+.boton:disabled {
+  opacity: 0.45;
+  filter: saturate(0.5);
+}
+
+.boton-fantasma {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.25));
+  color: #f7e9cd;
+  border-color: rgba(247, 217, 138, 0.5);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+.boton-verde {
+  background: linear-gradient(180deg, #b8f28a, #62b73c 70%, #3d8a22);
+}
+
+.boton-rojo {
+  background: linear-gradient(180deg, #ffb4a4, #d3503a 70%, #a33222);
+  color: #2a1a10;
+}
+
+/* Un sello/pegatina para las chapas y las etiquetas. */
+.sello {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 2px solid rgba(42, 26, 16, 0.8);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* El fondo nuevo: atardecer con el desierto en silueta y grano de pelicula. */
+/* El atardecer del Oeste (public/fondo.svg): cielo con estrellas, el sol del logo, mesetas, cactus,
+   polvo dorado y un matojo rodando. Va en los colores del logo para que este parezca de la escena. */
+.fondo-oeste {
+  background: #171c28 url('/fondo.svg') center bottom / cover no-repeat;
+}
+
+.fondo-oeste::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.10) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+
+/* Animaciones de la apertura de sobres. */
+@keyframes sobre-entra {
+  0% {
+    transform: translateY(40px) scale(0.8) rotate(-4deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.sobre-entra {
+  animation: sobre-entra 420ms cubic-bezier(0.2, 1.4, 0.5, 1) both;
+}
+
+@keyframes carta-sale {
+  0% {
+    transform: translateY(24px) scale(0.6) rotate(-8deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-8px) scale(1.08) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.carta-sale {
+  animation: carta-sale 420ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+@keyframes divina-brilla {
+  0%,
+  100% {
+    box-shadow: 0 0 22px rgba(251, 191, 36, 0.75), 0 0 60px rgba(251, 191, 36, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(251, 191, 36, 1), 0 0 110px rgba(251, 191, 36, 0.55);
+  }
+}
+
+.divina-brilla {
+  animation: divina-brilla 1.6s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   La carta con volumen: se ve en tres cuartos, con su canto y un brillo que
+   la recorre. Es CSS puro (nada de lienzos), asi que aguanta una rejilla
+   entera de cartas sin arrastrar el movil.
+   --------------------------------------------------------------------------- */
+
+.carta3d {
+  perspective: 800px;
+}
+
+.carta3d .carta3d-cuerpo {
+  transform: rotateX(7deg) rotateY(-6deg) translateZ(0);
+  transform-style: preserve-3d;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 4px 8px rgba(0, 0, 0, 0.45),
+    0 12px 22px rgba(0, 0, 0, 0.45),
+    var(--frame-glow, 0 0 0 transparent);
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 240ms ease-out;
+}
+
+.carta3d:active .carta3d-cuerpo {
+  transform: rotateX(0deg) rotateY(0deg) translateY(-3px) scale(1.03);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    0 22px 34px rgba(0, 0, 0, 0.5),
+    var(--frame-glow, 0 0 0 transparent);
+}
+
+/* El brillo que recorre la carta */
+.carta3d .carta3d-brillo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.4) 46%, transparent 60%);
+  background-size: 260% 100%;
+  animation: carta-brillo 4.2s linear infinite;
+  mix-blend-mode: screen;
+  opacity: 0.65;
+}
+
+@keyframes carta-brillo {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(224, 180, 99, 0.4);
+  border-radius: 999px;
+}
+
+/* El cartel del final de partida: entra con un golpe y se queda. */
+@keyframes resultado-pop {
+  0% {
+    transform: scale(0.6) rotate(-4deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.resultado-pop {
+  animation: resultado-pop 0.45s ease-out both;
+}
+
+/* El sobre: flota y se balancea solo hasta que lo tocas; si se toca sin rasgar, se sacude. */
+@keyframes sobre-flota {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: -1.2deg;
+  }
+  50% {
+    translate: 0 -7px;
+    rotate: 1.2deg;
+  }
+}
+.sobre-flota {
+  animation: sobre-flota 3.2s ease-in-out infinite;
+}
+@keyframes sobre-sacude {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -9px 0;
+  }
+  40% {
+    translate: 8px 0;
+  }
+  60% {
+    translate: -5px 0;
+  }
+  80% {
+    translate: 3px 0;
+  }
+}
+.sobre-sacude {
+  animation: sobre-sacude 420ms ease-out;
+}
+
+
+/* El destello de pantalla cuando entra una carta epica o divina: llega de golpe y se va. */
+@keyframes destello {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.destello {
+  animation: destello 0.9s ease-out both;
+}
+
+/* ── Tutorial: el anillo que late sobre lo que hay que tocar y el dedo que enseña el gesto ── */
+@keyframes tuto-anillo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.85), 0 0 18px rgba(251, 191, 36, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0), 0 0 28px rgba(251, 191, 36, 0.9);
+  }
+}
+.tuto-anillo {
+  animation: tuto-anillo 1.2s ease-in-out infinite;
+}
+@keyframes tuto-dedo {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(0) scale(0.9);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(var(--tuto-dy, -160px)) scale(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(var(--tuto-dy, -160px)) scale(1);
+    opacity: 0;
+  }
+}
+.tuto-dedo {
+  animation: tuto-dedo 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.7));
+}
+@keyframes tuto-latido {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+.tuto-latido {
+  display: inline-block;
+  animation: tuto-latido 0.8s ease-in-out infinite;
+}
+
+/* ── El logo: entra con golpe, flota y brilla ── */
+@keyframes logo-entra {
+  0% {
+    transform: scale(0.4) rotate(-6deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08) rotate(1.5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes logo-flota {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.6deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(0.6deg);
+  }
+}
+@keyframes logo-halo {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+@keyframes logo-destello {
+  0%,
+  80% {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.7)) brightness(1);
+  }
+  88% {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 22px rgba(255, 200, 60, 0.9)) brightness(1.18);
+  }
+  100% {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.7)) brightness(1);
+  }
+}
+.logo-gg {
+  animation: logo-entra 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.logo-gg-img {
+  animation: logo-flota 3.6s ease-in-out 0.7s infinite, logo-destello 4.5s ease-in-out 1s infinite;
+}
+.logo-gg-halo {
+  background: radial-gradient(circle, rgba(255, 196, 70, 0.55) 0%, rgba(255, 140, 30, 0.18) 45%, transparent 70%);
+  filter: blur(14px);
+  animation: logo-halo 3.6s ease-in-out infinite;
+}
+
+/* ── Los rayos de sol que giran detrás del logo ── */
+@keyframes logo-rayos {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.logo-gg-rayos {
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 110, 0.22) 0deg 7deg, transparent 7deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  animation: logo-rayos 40s linear infinite;
+}
+
+/* Cartel de cristal oscuro: para leer texto encima del atardecer del fondo. */
+.cartel-cristal {
+  border-radius: 22px;
+  border: 1px solid rgba(253, 211, 106, 0.3);
+  background: linear-gradient(180deg, rgba(23, 28, 40, 0.78), rgba(20, 11, 6, 0.82));
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 230, 160, 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+   La magia de las cartas grandes (epicas y divinas): cintas que giran,
+   rayos, aureola, holografico, chispas y el sello de su rareza.
+   --------------------------------------------------------------------------- */
+
+.card-cinta-epica {
+  background: conic-gradient(from 0deg, #3b0764, #e9d5ff, #a855f7, #2e1065, #f0abfc, #7e22ce, #3b0764);
+  animation-duration: 5s;
+}
+.card-cinta-especial {
+  background: conic-gradient(from 0deg, #082f49, #bae6fd, #0284c7, #082f49, #7dd3fc, #082f49);
+  animation-duration: 10s;
+  opacity: 0.85;
+}
+
+.card-frame[data-rarity='divina'] {
+  animation: card-latido-oro 2.4s ease-in-out infinite;
+}
+.card-frame[data-rarity='epica'] {
+  animation: card-latido-morado 3.2s ease-in-out infinite;
+}
+@keyframes card-latido-oro {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.55)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255, 220, 120, 0.95)); }
+}
+@keyframes card-latido-morado {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(192, 132, 252, 0.5)); }
+  50% { filter: drop-shadow(0 0 10px rgba(216, 160, 255, 0.9)); }
+}
+
+/* Rayos de sol girando detras del personaje (divinas). */
+.card-rayos {
+  position: absolute;
+  left: 50%;
+  top: 36%;
+  width: 240%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 226, 140, 0.55) 0deg 7deg, transparent 7deg 22deg);
+  mask-image: radial-gradient(circle, #000 8%, transparent 58%);
+  -webkit-mask-image: radial-gradient(circle, #000 8%, transparent 58%);
+  animation: frame-spin 16s linear infinite;
+}
+.card-aureola {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: 70%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 245, 200, 0.75), rgba(251, 191, 36, 0.35) 40%, transparent 70%);
+  animation: card-aureola 2.6s ease-in-out infinite;
+}
+@keyframes card-aureola {
+  0%, 100% { opacity: 0.6; scale: 0.9; }
+  50% { opacity: 1; scale: 1.1; }
+}
+
+/* Niebla morada que da vueltas (epicas). */
+.card-niebla {
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(circle at 30% 35%, rgba(192, 132, 252, 0.55), transparent 35%),
+    radial-gradient(circle at 70% 60%, rgba(240, 171, 252, 0.45), transparent 38%),
+    radial-gradient(circle at 45% 80%, rgba(126, 34, 206, 0.5), transparent 40%);
+  animation: frame-spin 12s linear infinite;
+}
+
+/* Holografico: una franja de colores que cruza la carta. */
+.card-holo {
+  position: absolute;
+  inset: 0;
+  background-size: 300% 300%;
+  mix-blend-mode: color-dodge;
+  opacity: 0.6;
+  animation: card-holo 5s ease-in-out infinite;
+}
+.card-holo-divina {
+  background-image: linear-gradient(
+    120deg,
+    transparent 25%,
+    rgba(255, 120, 120, 0.35) 36%,
+    rgba(255, 230, 120, 0.45) 42%,
+    rgba(120, 255, 170, 0.35) 48%,
+    rgba(120, 200, 255, 0.4) 54%,
+    rgba(220, 140, 255, 0.35) 60%,
+    transparent 72%
+  );
+}
+.card-holo-epica {
+  background-image: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(240, 171, 252, 0.4) 44%,
+    rgba(167, 139, 250, 0.45) 50%,
+    rgba(125, 211, 252, 0.3) 56%,
+    transparent 70%
+  );
+  animation-duration: 6.5s;
+}
+@keyframes card-holo {
+  0% { background-position: 100% 100%; }
+  50% { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+
+/* Chispas que suben: polvo de oro o runas moradas. */
+.card-chispa {
+  position: absolute;
+  bottom: -6px;
+  border-radius: 999px;
+  animation-name: card-chispa;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+.card-chispa-oro {
+  background: #fff6c8;
+  box-shadow: 0 0 4px 1px #fbbf24, 0 0 8px 2px rgba(251, 191, 36, 0.6);
+}
+.card-chispa-runa {
+  background: #f5e9ff;
+  border-radius: 1px;
+  rotate: 45deg;
+  box-shadow: 0 0 4px 1px #c084fc, 0 0 8px 2px rgba(168, 85, 247, 0.6);
+}
+@keyframes card-chispa {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  70% { opacity: 0.9; }
+  100% { transform: translate(6px, -100cqw) scale(1.1); opacity: 0; }
+}
+
+/* El sello con su rareza, arriba a la derecha. */
+.card-sello {
+  position: absolute;
+  right: 5%;
+  top: 6%;
+  padding: 0.5cqw 3cqw;
+  border-radius: 999px;
+  font-size: 7.5cqw;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.card-sello-divina {
+  color: #3b2300;
+  background: linear-gradient(90deg, #b45309, #fde68a, #fffbeb, #fde68a, #b45309);
+  background-size: 200% 100%;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.9);
+  animation: card-sello 2.5s linear infinite;
+}
+.card-sello-epica {
+  color: #fdf4ff;
+  background: linear-gradient(90deg, #6b21a8, #c084fc, #6b21a8);
+  background-size: 200% 100%;
+  box-shadow: 0 0 6px rgba(192, 132, 252, 0.85);
+  animation: card-sello 3.5s linear infinite;
+}
+@keyframes card-sello {
+  from { background-position: 0% 0; }
+  to { background-position: 200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-rayos, .card-aureola, .card-niebla, .card-holo, .card-chispa, .card-sello,
+  .card-frame, .card-cinta { animation: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   El tablon del Antiguo Oeste: madera oscura y carteles de SE BUSCA clavados.
+   --------------------------------------------------------------------------- */
+
+.tablon {
+  position: relative;
+  border-radius: 14px;
+  border: 2px solid #120a04;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 200, 110, 0.18), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 2px, transparent 2px 26px),
+    repeating-linear-gradient(90deg, rgba(255, 220, 160, 0.04) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, #4a2c14, #2c190b);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 220, 160, 0.15);
+}
+
+.cartel-busca {
+  border-radius: 6px 10px 7px 12px;
+  border: 2px solid #3b2410;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.55), transparent 40%),
+    radial-gradient(circle at 90% 95%, rgba(110, 60, 20, 0.35), transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(140, 80, 30, 0.15), transparent 30%),
+    linear-gradient(180deg, #f3e2b8, #e2c58e);
+  box-shadow:
+    0 12px 22px rgba(0, 0, 0, 0.55),
+    inset 0 0 26px rgba(110, 60, 20, 0.35);
+  transition: rotate 200ms ease-out, transform 200ms ease-out;
+}
+.cartel-busca:hover {
+  rotate: 0deg !important;
+  transform: translateY(-2px);
+}
+/* Las cartas grandes: el cartel brilla con el color de su rareza. */
+.cartel-busca-grande {
+  box-shadow:
+    0 12px 22px rgba(0, 0, 0, 0.55),
+    0 0 22px color-mix(in srgb, var(--cartel-color) 65%, transparent),
+    inset 0 0 26px rgba(110, 60, 20, 0.35);
+  animation: cartel-brillo 2.8s ease-in-out infinite;
+}
+@keyframes cartel-brillo {
+  0%, 100% { box-shadow: 0 12px 22px rgba(0,0,0,0.55), 0 0 12px color-mix(in srgb, var(--cartel-color) 45%, transparent), inset 0 0 26px rgba(110,60,20,0.35); }
+  50% { box-shadow: 0 12px 22px rgba(0,0,0,0.55), 0 0 28px color-mix(in srgb, var(--cartel-color) 85%, transparent), inset 0 0 26px rgba(110,60,20,0.35); }
+}
+
+/* El sello de tinta: CAPTURADA o SIN FONDOS. */
+.cartel-sello {
+  position: absolute;
+  right: 12px;
+  bottom: 78px;
+  rotate: -10deg;
+  padding: 2px 10px;
+  border-width: 3px;
+  border-style: solid;
+  border-radius: 6px;
+  font-family: 'Rye', serif;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.cartel-progreso {
+  background-image: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%) !important;
+  background-size: 200% 100%;
+  animation: cartel-progreso 2s linear infinite;
+}
+@keyframes cartel-progreso {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cartel-busca-grande, .cartel-progreso { animation: none !important; }
+}
+
+/* El viaje en diligencia: el caballo traquetea. */
+@keyframes viaje-traqueteo {
+  0% {
+    transform: translate(-14px, 0) rotate(-6deg);
+  }
+  100% {
+    transform: translate(14px, -6px) rotate(6deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Abrir sobres: los rayos de detras, la carta que llega, se gira y se va, las
+   chispas, la onda y el temblor de las buenas.
+   --------------------------------------------------------------------------- */
+
+.revelar-rayos {
+  translate: -50% -50%;
+  mask-image: radial-gradient(circle, #000 6%, transparent 42%);
+  -webkit-mask-image: radial-gradient(circle, #000 6%, transparent 42%);
+  animation: frame-spin 26s linear infinite;
+}
+
+@keyframes revelar-entra {
+  0% {
+    transform: translateY(70vh) scale(0.3) rotate(-18deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-14px) scale(1.06) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+.revelar-entra {
+  animation: revelar-entra 520ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+@keyframes revelar-sale {
+  to {
+    transform: translate(-30vw, 46vh) scale(0.15) rotate(-25deg);
+    opacity: 0;
+  }
+}
+.revelar-sale {
+  animation: revelar-sale 320ms cubic-bezier(0.5, 0, 0.9, 0.5) both;
+}
+
+@keyframes revelar-chispa {
+  0% {
+    transform: translate(0, 0) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.2);
+    opacity: 0;
+  }
+}
+.revelar-chispa {
+  animation-name: revelar-chispa;
+  animation-timing-function: cubic-bezier(0.1, 0.8, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes revelar-onda {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6);
+    opacity: 0;
+  }
+}
+.revelar-onda {
+  animation: revelar-onda 700ms ease-out both;
+}
+
+@keyframes revelar-nombre {
+  0% {
+    transform: translateY(14px) scale(0.85);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+.revelar-nombre {
+  animation: revelar-nombre 360ms cubic-bezier(0.2, 1.3, 0.4, 1) 250ms both;
+}
+
+@keyframes revelar-pulso {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+.revelar-pulso {
+  animation: revelar-pulso 1.4s ease-in-out infinite;
+}
+
+/* El brillo que cruza el dorso de vez en cuando. */
+.revelar-brillo {
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.35) 47%, transparent 58%);
+  background-size: 260% 100%;
+  animation: carta-brillo 2.6s linear infinite;
+  mix-blend-mode: screen;
+}
+
+/* El aura del sobre: late del color de su mejor carta. */
+@keyframes sobre-aura {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+.sobre-aura {
+  animation: sobre-aura 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revelar-rayos, .revelar-pulso, .revelar-brillo, .sobre-aura { animation: none !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   Elegir bando: el titulo entra de golpe, el panel sube, las barras se llenan
+   y el boton tiene un brillo que lo cruza.
+   --------------------------------------------------------------------------- */
+
+@keyframes clase-titulo {
+  0% {
+    transform: translateY(-18px) scale(1.35);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  60% {
+    transform: translateY(2px) scale(0.97);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+.clase-titulo {
+  animation: clase-titulo 520ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+@keyframes clase-panel {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.clase-panel {
+  animation: clase-panel 380ms ease-out both;
+}
+
+@keyframes clase-barra {
+  from {
+    transform: scaleY(0.2) skewX(-12deg);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1) skewX(-12deg);
+    opacity: 1;
+  }
+}
+.clase-barra {
+  animation: clase-barra 260ms ease-out both;
+}
+
+.clase-boton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.65) 48%, transparent 60%);
+  background-size: 260% 100%;
+  animation: carta-brillo 2.4s linear infinite;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   El tutorial con Bigotes: el bocadillo entra de golpe, la cara habla, la
+   estrella de cada mision salta y cae confeti.
+   --------------------------------------------------------------------------- */
+
+@keyframes guia-pop {
+  0% {
+    transform: translateY(10px) scale(0.92);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(-2px) scale(1.01);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+.guia-pop {
+  animation: guia-pop 320ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+@keyframes guia-habla {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  25% {
+    transform: rotate(-4deg) translateY(-2px);
+  }
+  75% {
+    transform: rotate(4deg) translateY(-1px);
+  }
+}
+.guia-habla {
+  animation: guia-habla 0.5s ease-in-out 3;
+}
+
+@keyframes guia-dedo {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(10px);
+  }
+}
+.guia-dedo {
+  animation: guia-dedo 0.8s ease-in-out infinite;
+}
+
+@keyframes guia-confeti {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--giro));
+    opacity: 0;
+  }
+}
+.guia-confeti {
+  animation: guia-confeti 1.3s cubic-bezier(0.15, 0.6, 0.4, 1) both;
+}
+
+@keyframes guia-sello {
+  0% {
+    transform: scale(0.3) rotate(-12deg);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.12) rotate(3deg);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1) rotate(0deg);
+  }
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9) translateY(-20px);
+    opacity: 0;
+  }
+}
+.guia-sello {
+  animation: guia-sello 1.5s ease-out both;
+}
+
+@keyframes guia-estrella {
+  0% {
+    transform: scale(0) rotate(-180deg);
+  }
+  60% {
+    transform: scale(1.3) rotate(15deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+.guia-estrella {
+  display: inline-block;
+  animation: guia-estrella 600ms cubic-bezier(0.2, 1.4, 0.4, 1) 100ms both;
+}
+.guia-estrella-fin {
+  display: inline-block;
+  animation: guia-estrella 500ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.8));
+}
