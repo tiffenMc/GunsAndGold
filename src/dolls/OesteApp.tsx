@@ -8,10 +8,11 @@ import { gameCards, todasLasCartasDelJuego, useGameCards } from './cards/store'
 import { useAuth } from '../hooks/useAuth'
 import { PuertaScreen } from './auth/PuertaScreen'
 import { cerrarSesionLocal, useCuentaLocal } from './auth/cuentasLocales'
+import { conectarCuenta, estaConectada } from './auth/sincronizar'
 import { jugadorDeCuenta } from './auth/cuentaJugador'
 import { PersonajesScreen } from './game/PersonajesScreen'
 import { atarPersonaje, moverMonedas, objetivosDeHoy, personajesDe, pintaDe, players, sobresPendientes, switchPlayer } from './game/players'
-import { losMasBuscados } from './game/ranking'
+import { EN_LA_TARIMA, useRanking } from './game/ranking'
 import { botinDeRango, premioDeRango, rangoDe } from './game/progreso'
 import { Entrenar, Incursiones, espera } from './campo/CampoScreen'
 import { useNow } from '../hooks/useNow'
@@ -224,8 +225,9 @@ function Mundo({
     () => munecos.filter((card) => card.id !== retrato?.id).filter((_, i) => i % 5 === 2).slice(0, 7),
     [munecos, retrato?.id],
   )
-  // Los cinco mejores para la tarima de la plaza.
-  const buscados = useMemo(() => losMasBuscados(players()), [player])
+  // Los cinco mejores para la tarima de la plaza (de todos los jugadores, si hay servidor).
+  const { fichas: lista } = useRanking(players())
+  const buscados = useMemo(() => lista.slice(0, EN_LA_TARIMA), [lista])
   const active = player.decks[player.activeDeck]
   const problema = active ? deckProblem(active, player.unlocked, cards) : 'No tienes baraja'
   const encargos = objetivosDeHoy(player)
@@ -588,7 +590,6 @@ export function OesteApp() {
   const [tutorial, setTutorial] = useState(false)
   /** La partida con un amigo (cuando ya estais los dos en la sala). */
   const [amigo, setAmigo] = useState<PartidaConAmigo | null>(null)
-  const ahora = useNow(1000)
   const cards = useGameCards()
 
   /** Ir a un sitio de golpe (el tutorial, o al acabar una partida). */
@@ -643,6 +644,29 @@ export function OesteApp() {
     }, 1300)
   }
   const salirALaCalle = () => setZona(null)
+
+  /**
+   * Si la cuenta vive en el servidor, al abrir el juego se trae su partida (lo último que se jugó,
+   * en este móvil o en otro) antes de elegir personaje.
+   */
+  const [conectada, setConectada] = useState(() => !cuenta?.token || estaConectada(cuenta.token))
+  useEffect(() => {
+    if (!cuenta?.token || estaConectada(cuenta.token)) {
+      setConectada(true)
+      return
+    }
+    setConectada(false)
+    let vivo = true
+    void conectarCuenta(`local:${cuenta.usuario}`, cuenta.token).then((fallo) => {
+      if (!vivo) return
+      // La sesión ya no vale (p. ej. se cerró en otro sitio): a la puerta, a entrar otra vez.
+      if (fallo) cerrarSesionLocal()
+      setConectada(true)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [cuenta?.token, cuenta?.usuario])
 
   /** La cuenta con la que se ha entrado (del dispositivo o de la nube), si hay. */
   const cuentaId = cuenta ? `local:${cuenta.usuario}` : auth.user ? `nube:${auth.user.id}` : null
@@ -721,7 +745,7 @@ export function OesteApp() {
       </SafeCanvas>
       <Column batalla={screen === 'batalla'}>
         {/* La puerta: sin cuenta no se juega. */}
-        {!auth.ready ? (
+        {!auth.ready || !conectada ? (
           <Loading />
         ) : !auth.user && !cuenta && !invitado ? (
           // Con usuario (cuenta del dispositivo), con la nube o con el invitado de desarrollo.
@@ -825,7 +849,7 @@ export function OesteApp() {
             )}
             {screen === 'mundo' && zona === 'incursiones' && (
               <PanelDelDesierto>
-                <Incursiones cards={cards} onAtras={salirALaCalle} onJugar={jugar} ahora={ahora} />
+                <IncursionesConReloj cards={cards} onAtras={salirALaCalle} onJugar={jugar} />
               </PanelDelDesierto>
             )}
             {screen === 'mundo' && zona === 'entrenar' && (
@@ -923,6 +947,15 @@ export function OesteApp() {
       </Column>
     </>
   )
+}
+
+/**
+ * Las incursiones con su reloj (la cuenta atrás va por segundos). El reloj va aquí dentro y no en la
+ * app: si no, cada segundo se volvería a pintar el juego entero, batalla incluida.
+ */
+function IncursionesConReloj(props: Omit<Parameters<typeof Incursiones>[0], 'ahora'>) {
+  const ahora = useNow(1000)
+  return <Incursiones {...props} ahora={ahora} />
 }
 
 /** Los paneles del desierto (incursiones y entrenar) por encima del mundo, a pantalla completa. */

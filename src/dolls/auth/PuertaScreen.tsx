@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { hayServidor } from '../../lib/servidor'
 import { useAuth } from '../../hooks/useAuth'
-import { crearCuentaLocal, entrarLocal } from './cuentasLocales'
+import { crearCuenta, entrar } from './cuentasLocales'
 import { Logo } from '../Logo'
 
 /**
  * La puerta del juego: aquí se entra.
  *
- * Lo más rápido: **usuario y contraseña** y ya está — esas cuentas viven en este dispositivo, sin
- * correo ni confirmaciones. Si escribes un **correo** (con @), entonces se usa la cuenta de la nube
+ * Lo más rápido: **usuario y contraseña** y ya está, sin correo ni confirmaciones (la cuenta vive
+ * en el servidor del juego, y si no lo hay, en este dispositivo). Si escribes un **correo** (con @), entonces se usa la cuenta de la nube
  * (con su correo de confirmación), y también está el botón de **Google**.
  */
 export function PuertaScreen({ onInvitado }: { onInvitado?: () => void }) {
@@ -17,6 +18,11 @@ export function PuertaScreen({ onInvitado }: { onInvitado?: () => void }) {
   const [pass, setPass] = useState('')
   const [aviso, setAviso] = useState<string | null>(null)
   const [yendo, setYendo] = useState(false)
+  /** Si las cuentas viven en el servidor (el juego publicado) o en este dispositivo. */
+  const [conServidor, setConServidor] = useState(false)
+  useEffect(() => {
+    void hayServidor().then(setConServidor)
+  }, [])
 
   const esCorreo = usuario.includes('@')
 
@@ -25,8 +31,10 @@ export function PuertaScreen({ onInvitado }: { onInvitado?: () => void }) {
     setAviso(null)
 
     if (!esCorreo) {
-      // Cuenta de este dispositivo: usuario y contraseña, sin más.
-      const error = modo === 'entrar' ? entrarLocal(usuario, pass) : crearCuentaLocal(usuario, pass)
+      // Usuario y contraseña, sin más (en el servidor si lo hay; si no, en este dispositivo).
+      setYendo(true)
+      const error = modo === 'entrar' ? await entrar(usuario, pass) : await crearCuenta(usuario, pass)
+      setYendo(false)
       setAviso(error)
       return
     }
@@ -79,7 +87,9 @@ export function PuertaScreen({ onInvitado }: { onInvitado?: () => void }) {
         <p className="mt-1.5 text-[12px] leading-snug text-[#5b3a1c]/80">
           {esCorreo
             ? 'Con correo se usa la cuenta de la nube (te pedirá confirmarlo).'
-            : 'Sin arroba: la cuenta se queda en este dispositivo, sin correos ni historias.'}
+            : conServidor
+              ? 'Sin arroba y sin correos: entra con tu usuario desde cualquier móvil y sigues donde lo dejaste.'
+              : 'Sin arroba: la cuenta se queda en este dispositivo, sin correos ni historias.'}
         </p>
 
         {aviso && <p className="mt-2 rounded-lg bg-[#2a1a10]/10 px-2 py-1 text-[13px] text-[#5b3a1c]">{aviso}</p>}

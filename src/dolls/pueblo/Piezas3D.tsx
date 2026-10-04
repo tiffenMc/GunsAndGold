@@ -573,7 +573,8 @@ function Corona({ y }: { y: number }) {
 /** El muñeco de un buscado: hace su animación dibujada (si tiene) o se queda en su pose. */
 function MunecoBuscado({ ficha, escala }: { ficha: FichaDeBuscado; escala: number }) {
   const motion: Motion = useMemo(() => (ficha.animacion ? movimientoDeDibujo(ficha.animacion, true) : QUIETO), [ficha.animacion])
-  return <DollBody look={ficha.look} motion={motion} playing scale={ESCALA_MUNECO * escala} />
+  // Ligeros (pocas mallas), como la gente de la calle: son cinco y en el móvil pesan.
+  return <DollBody look={ficha.look} motion={motion} playing lite scale={ESCALA_MUNECO * escala} />
 }
 
 function Puesto({ sitio, ficha }: { sitio: (typeof PUESTOS)[number]; ficha: FichaDeBuscado | undefined }) {

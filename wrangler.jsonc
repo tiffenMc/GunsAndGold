@@ -1,13 +1,25 @@
-// La web del juego en Cloudflare: los archivos de `dist/` (lo que saca `npm run build`), servidos
-// tal cual. Cada rama de GitHub tiene su propio enlace de prueba; `main` es la versión oficial.
-// Más adelante, aquí se añadirá el servidor de las partidas (Durable Objects).
+// El juego en Cloudflare: la web (los archivos de `dist/`, lo que saca `npm run build`) y el servidor
+// (`servidor/worker.ts`): cuentas, partidas guardadas, Los Más Buscados y las salas con amigos.
+// Cada rama de GitHub tiene su propio enlace de prueba; `main` es la versión oficial.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gunsandgold",
+  "main": "servidor/worker.ts",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     // Una dirección que no existe (p. ej. /pueblo) abre el juego en vez de un error.
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    // Lo del servidor pasa primero por el worker; lo demás son archivos y van directos.
+    "run_worker_first": ["/api/*", "/sala"]
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "PUEBLO", "class_name": "Pueblo" },
+      { "name": "SALA", "class_name": "Sala" }
+    ]
+  },
+  // Las dos con SQLite (las del plan gratis de Cloudflare).
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Pueblo", "Sala"] }]
 }

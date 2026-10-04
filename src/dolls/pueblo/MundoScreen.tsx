@@ -1,4 +1,4 @@
-import { Html } from '@react-three/drei'
+import { Html, PerformanceMonitor } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject, ReactNode } from 'react'
@@ -68,6 +68,8 @@ const CORRE = 15
 const LEJOS = 6
 /** Lo que se ve el salto de los atajos antes de entrar (ms). */
 const SALTO_MS = 380
+/** La resolución más alta a la que se dibuja el mundo (más, y el móvil no da abasto). */
+const CALIDAD_MAX = typeof window === 'undefined' ? 1.5 : Math.min(1.5, window.devicePixelRatio)
 /** Lo cerca que hay que estar de una puerta para que salga el botón de entrar. */
 const CERCA = 2.6
 
@@ -94,6 +96,8 @@ export function MundoScreen(props: MundoProps) {
   const salto = useRef<Salto | null>(null)
   const [cerca, setCerca] = useState<Sitio | null>(null)
   const [listo, setListo] = useState(false)
+  /** La resolución de dibujo: se ajusta sola según lo bien que vaya. */
+  const [calidad, setCalidad] = useState(CALIDAD_MAX)
   const entrar = useRef(onEntrar)
   entrar.current = onEntrar
 
@@ -126,11 +130,15 @@ export function MundoScreen(props: MundoProps) {
       style={{ background: `linear-gradient(180deg, #5f7fb3 0%, #b9a3a8 38%, ${mundo.cielo} 62%, ${mundo.suelo.arena} 100%)` }}
     >
       <Canvas
-        dpr={[1, 1.75]}
+        dpr={calidad}
         frameloop={pausado ? 'never' : 'always'}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        // En las pantallas muy densas (casi todos los móviles) el suavizado de bordes cuesta mucho y
+        // apenas se nota: se quita.
+        gl={{ antialias: typeof window === 'undefined' || window.devicePixelRatio < 2, alpha: true, powerPreference: 'high-performance' }}
         camera={{ fov: 50, near: 0.5, far: 260, position: [inicio.x, 12, inicio.z + 18] }}
       >
+        {/* Si va a tirones, se dibuja a menos resolución (y vuelve a subir si se recupera). */}
+        <PerformanceMonitor onDecline={() => setCalidad(1)} onIncline={() => setCalidad(CALIDAD_MAX)} flipflops={3} />
         <fog attach="fog" args={[mundo.cielo, 55, 175]} />
         <hemisphereLight args={['#ffe9c7', '#8a5a2b', 1.05]} />
         <directionalLight position={[-25, 40, 30]} intensity={1.7} color="#ffd9a8" />

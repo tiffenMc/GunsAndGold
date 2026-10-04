@@ -835,3 +835,39 @@ export function borrarAnimacion(id: string): void {
 export function animacionDe(player: Player): AnimacionDibujada | null {
   return player.animaciones.find((a) => a.id === player.animacion) ?? null
 }
+
+// ---------------------------------------------------------------------------
+// Para guardar en el servidor: los personajes de una cuenta
+// ---------------------------------------------------------------------------
+
+/** Avisa cada vez que cambia algo de los jugadores (para guardarlo en el servidor). */
+export function alCambiarJugadores(fn: () => void): () => void {
+  return subscribe(fn)
+}
+
+/** Los personajes de una cuenta, tal cual, para mandarlos al servidor. */
+export function exportarPersonajes(cuentaId: string): Player[] {
+  return state.players.filter((player) => player.cuentaId === cuentaId)
+}
+
+/**
+ * Pone los personajes de una cuenta tal y como vienen del servidor (los de antes de esa cuenta en
+ * este dispositivo se cambian por estos). Lo que venga roto se arregla o se descarta.
+ */
+export function importarPersonajes(cuentaId: string, lista: unknown[]): void {
+  const cards = todasLasCartasDelJuego()
+  const suyos: Player[] = []
+  for (const bruto of lista) {
+    if (!bruto || typeof bruto !== 'object') continue
+    const player = bruto as Player
+    if (typeof player.id !== 'string' || !Array.isArray(player.unlocked) || !Array.isArray(player.decks)) continue
+    // Nunca se cuela un admin desde fuera.
+    suyos.push(clean({ ...player, cuentaId, admin: false, clase: player.clase === 'todas' ? 'vaqueros' : player.clase }, cards))
+  }
+  const otros = state.players.filter((player) => player.cuentaId !== cuentaId && !suyos.some((s) => s.id === player.id))
+  const players = [...otros, ...suyos]
+  const current = players.some((player) => player.id === state.current) ? state.current : (players[0]?.id ?? state.current)
+  state = { players, current }
+  setClaseActiva(players.find((player) => player.id === current)?.clase ?? 'vaqueros')
+  persist()
+}
