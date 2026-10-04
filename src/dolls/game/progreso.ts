@@ -128,3 +128,18 @@ export function paraElSiguienteRango(monedas: number): number | null {
   const siguiente = RANGOS.find((rango) => rango.desde > monedas)
   return siguiente ? siguiente.desde - monedas : null
 }
+
+// ---------------------------------------------------------------------------
+// Lingotes y diamantes (para la Sastrería)
+// ---------------------------------------------------------------------------
+
+/** Los lingotes de cada partida de rango: siempre se llevan algo, y más si ganas. */
+export const LINGOTES_GANANDO = 15
+export const LINGOTES_PERDIENDO = 6
+/** La probabilidad de que una partida de rango suelte un diamante. */
+export const PROB_DIAMANTE = 0.08
+
+/** Lo que suelta una partida de rango: lingotes siempre y, a veces, un diamante. */
+export function botinDeRango(gano: boolean, azar: () => number = Math.random): { lingotes: number; diamantes: number } {
+  return { lingotes: gano ? LINGOTES_GANANDO : LINGOTES_PERDIENDO, diamantes: azar() < PROB_DIAMANTE ? 1 : 0 }
+}

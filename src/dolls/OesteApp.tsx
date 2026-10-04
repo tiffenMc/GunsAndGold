@@ -10,8 +10,9 @@ import { PuertaScreen } from './auth/PuertaScreen'
 import { cerrarSesionLocal, useCuentaLocal } from './auth/cuentasLocales'
 import { jugadorDeCuenta } from './auth/cuentaJugador'
 import { PersonajesScreen } from './game/PersonajesScreen'
-import { atarPersonaje, moverMonedas, objetivosDeHoy, personajesDe, sobresPendientes, switchPlayer } from './game/players'
-import { premioDeRango, rangoDe } from './game/progreso'
+import { atarPersonaje, moverMonedas, objetivosDeHoy, personajesDe, pintaDe, players, sobresPendientes, switchPlayer } from './game/players'
+import { losMasBuscados } from './game/ranking'
+import { botinDeRango, premioDeRango, rangoDe } from './game/progreso'
 import { Entrenar, Incursiones, espera } from './campo/CampoScreen'
 import { useNow } from '../hooks/useNow'
 import { SobreScreen } from './sobres/SobreScreen'
@@ -28,6 +29,7 @@ import {
   deckProblem,
   entrenarCaracteristica,
   extrasDeBatalla,
+  ganarBotin,
   ganarTrozoDeCarta,
   gastarCaracteristicas,
   getPlayer,
@@ -52,6 +54,8 @@ import { MUNDOS, guardarPosicion, sitioDe } from './pueblo/lugares'
 import type { Lugar, Zona } from './pueblo/lugares'
 import { BarPanel, PanelDeSitio, RangoPanel, SaloonPanel, TablonPanel, Viaje } from './pueblo/Zonas'
 import type { PestanaBar } from './pueblo/Zonas'
+import { BuscadosPanel } from './pueblo/BuscadosPanel'
+import { SastreriaPanel } from './pueblo/SastreriaPanel'
 
 /** Lo que te llevas al acabar una partida: una carta nueva, un entreno o un trozo de carta. */
 type Premio =
@@ -152,8 +156,16 @@ function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha }: { lugar: Lugar; 
           {lugar === 'pueblo' ? '🤠 El pueblo' : '🏜️ El desierto'}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="pointer-events-auto flex items-center gap-1 rounded-full border-2 border-[#6b4423] bg-[#1a0f06]/85 px-2.5 py-1 font-west text-[16px] text-amber-200">
-            <Icono nombre="monedas" /> {player.monedas}
+          <span className="pointer-events-auto flex items-center gap-2 rounded-full border-2 border-[#6b4423] bg-[#1a0f06]/85 px-2.5 py-1 font-west text-[16px] text-amber-200">
+            <span title="Monedas (tu rango)">
+              <Icono nombre="monedas" /> {player.monedas}
+            </span>
+            <span className="text-yellow-300" title="Lingotes de oro">
+              <Icono nombre="lingotes" /> {player.lingotes}
+            </span>
+            <span className="text-cyan-300" title="Diamantes">
+              <Icono nombre="diamantes" /> {player.diamantes}
+            </span>
           </span>
           {player.sobres.length > 0 && (
             <button
@@ -203,12 +215,17 @@ function Mundo({
   // Cada medio minuto basta para los carteles (cuánto falta para las incursiones, etc.).
   const ahora = useNow(30_000)
   const munecos = useMemo(() => cards.filter((card): card is BattleCard => card.kind === 'batalla'), [cards])
-  const tuyo = munecos.find((card) => card.id === player.avatar) ?? munecos[0]
+  const retrato = munecos.find((card) => card.id === player.avatar) ?? munecos[0]
+  // Tu vaquero va por la calle con tu pinta (la de la Sastrería).
+  const pinta = useMemo(() => pintaDe(player), [player])
+  const tuyo = useMemo(() => (retrato ? { ...retrato, look: pinta } : undefined), [retrato, pinta])
   // La gente de la calle: unos cuantos muñecos del juego, siempre los mismos.
   const vecinos = useMemo(
-    () => munecos.filter((card) => card.id !== tuyo?.id).filter((_, i) => i % 5 === 2).slice(0, 7),
-    [munecos, tuyo?.id],
+    () => munecos.filter((card) => card.id !== retrato?.id).filter((_, i) => i % 5 === 2).slice(0, 7),
+    [munecos, retrato?.id],
   )
+  // Los cinco mejores para la tarima de la plaza.
+  const buscados = useMemo(() => losMasBuscados(players()), [player])
   const active = player.decks[player.activeDeck]
   const problema = active ? deckProblem(active, player.unlocked, cards) : 'No tienes baraja'
   const encargos = objetivosDeHoy(player)
@@ -221,6 +238,8 @@ function Mundo({
   const info: Partial<Record<Zona, InfoDeSitio>> = {
     tablon: { texto: porCobrar > 0 ? `¡${porCobrar} encargo${porCobrar === 1 ? '' : 's'} para cobrar!` : 'Tu ficha y los encargos', aviso: porCobrar },
     bar: { texto: problema ? '¡Tu baraja está a medias!' : `${player.unlocked.length}/${cards.length} cartas`, aviso: problema ? 1 : 0 },
+    ranking: { texto: buscados[0] ? `Nº1: ${buscados[0].nombre} · ${buscados[0].monedas} monedas` : '¡Se busca al primero!' },
+    sastreria: { texto: `${player.lingotes} lingotes · ${player.diamantes} diamantes` },
     saloon: { texto: 'Partida rápida · con amigos' },
     sheriff: { texto: 'Tu perfil y personajes' },
     diligencia: { texto: lugar === 'pueblo' ? 'Incursiones · rango · entrenar' : 'Vuelta al pueblo' },
@@ -248,6 +267,7 @@ function Mundo({
         })),
       }}
       carteles={nombres}
+      buscados={buscados}
       onEntrar={onEntrar}
     >
       {children}
@@ -418,12 +438,15 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
   /** Lo que se ha llevado (o perdido) al acabar: sale en el cartel del final, no en otra ventana. */
   const [premio, setPremio] = useState<Premio | null>(null)
   const [monedas, setMonedas] = useState<number | null>(null)
+  /** Los lingotes (y el diamante, si ha caído) de la partida de rango. */
+  const [botin, setBotin] = useState<{ lingotes: number; diamantes: number } | null>(null)
   /** Ya ha acabado: salir es gratis. Mientras se juega, salir siempre penaliza. */
   const [terminada, setTerminada] = useState(false)
   const onPrize = setPremio
   const otra = () => {
     setPremio(null)
     setMonedas(null)
+    setBotin(null)
     setTerminada(false)
     setMatch((current) => ({ key: current.key + 1, scenario: pick() }))
   }
@@ -467,6 +490,10 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
             const premio = premioDeRango()
             moverMonedas(won ? premio : -premio)
             setMonedas(won ? premio : -premio)
+            // Y siempre caen lingotes (más si ganas); a veces, un diamante.
+            const suelto = botinDeRango(won)
+            ganarBotin(suelto)
+            setBotin(suelto)
             if (!won) return
             const card = unlockRandom()
             if (card) onPrize({ tipo: 'carta', card, arquetipo: arquetipoDe(getPlayer(), card.id) })
@@ -512,6 +539,18 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
                 <p className="font-west text-[30px] leading-none" style={{ color: monedas >= 0 ? '#86efac' : '#fca5a5' }}>
                   {monedas >= 0 ? '+' : '−'}
                   {Math.abs(monedas)} <Icono nombre="monedas" />
+                </p>
+              )}
+              {botin && (
+                <p className="flex items-center justify-center gap-3 font-west text-[22px] leading-none">
+                  <span className="text-amber-300">
+                    +{botin.lingotes} <Icono nombre="lingotes" />
+                  </span>
+                  {botin.diamantes > 0 && (
+                    <span className="sobre-entra text-cyan-300" style={{ textShadow: '0 0 12px #22d3ee' }}>
+                      ¡+{botin.diamantes} <Icono nombre="diamantes" />!
+                    </span>
+                  )}
                 </p>
               )}
               {premio && <PremioDetalle premio={premio} />}
@@ -755,6 +794,8 @@ export function OesteApp() {
                 onPrizeSeen={() => setPrize(null)}
               />
             )}
+            {screen === 'mundo' && zona === 'ranking' && <BuscadosPanel onSalir={salirALaCalle} onJugar={() => abrir('desierto', 'rango')} />}
+            {screen === 'mundo' && zona === 'sastreria' && <SastreriaPanel onSalir={salirALaCalle} />}
             {screen === 'mundo' && zona === 'bar' && <BarPanel pestana={pestanaBar} onPestana={setPestanaBar} onSalir={salirALaCalle} />}
             {screen === 'mundo' && zona === 'saloon' && (
               <SaloonPanel

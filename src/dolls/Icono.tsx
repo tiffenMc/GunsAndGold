@@ -42,6 +42,12 @@ import {
   GiWantedReward,
   GiWesternHat,
   GiSoundOn,
+  GiGoldBar,
+  GiCutDiamond,
+  GiSewingMachine,
+  GiPodiumWinner,
+  GiPencilBrush,
+  GiCrown,
 } from 'react-icons/gi'
 
 /**
@@ -90,6 +96,12 @@ const ICONOS = {
   dedo: GiPointing,
   hecho: GiCheckMark,
   medalla: GiStarMedal,
+  lingotes: GiGoldBar,
+  diamantes: GiCutDiamond,
+  sastreria: GiSewingMachine,
+  ranking: GiPodiumWinner,
+  dibujar: GiPencilBrush,
+  corona: GiCrown,
 } satisfies Record<string, IconType>
 
 export type NombreDeIcono = keyof typeof ICONOS

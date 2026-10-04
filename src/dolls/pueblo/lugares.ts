@@ -13,7 +13,17 @@ import type { Placement } from '../scenes/models'
 export type Lugar = 'pueblo' | 'desierto'
 
 /** Lo que se abre al entrar en un sitio. */
-export type Zona = 'tablon' | 'bar' | 'saloon' | 'sheriff' | 'diligencia' | 'incursiones' | 'entrenar' | 'rango'
+export type Zona =
+  | 'tablon'
+  | 'ranking'
+  | 'bar'
+  | 'sastreria'
+  | 'saloon'
+  | 'sheriff'
+  | 'diligencia'
+  | 'incursiones'
+  | 'entrenar'
+  | 'rango'
 
 export interface Sitio {
   zona: Zona
@@ -69,9 +79,8 @@ export const PUEBLO: Mundo = {
   limites: { x: [-50, 46], z: [0.4, 11] },
   estorbos: [
     { x: 6.5, z: 9.5, r: 1.3 }, // el pozo
-    { x: -8.2, z: 1.4, r: 0.9 }, // el poste de atar los caballos y el abrevadero
-    { x: -6.2, z: 1.2, r: 0.9 },
-    { x: 24, z: 1.4, r: 0.9 },
+    { x: 24, z: 1.4, r: 0.9 }, // el poste de atar los caballos y el abrevadero
+    { x: 26.2, z: 1.2, r: 0.9 },
     { x: 39, z: 4.6, r: 2.2 }, // la diligencia
     { x: 42, z: 4.6, r: 1.6 },
   ],
@@ -82,9 +91,19 @@ export const PUEBLO: Mundo = {
       lema: 'Se busca: tu ficha y los encargos de hoy',
       icono: 'se_busca',
       color: '#fbbf24',
-      puerta: { x: 0, z: 2.6 },
-      caja: { x: 0, z: 0.4, w: 4.4, d: 1.4, h: 3.6 },
+      puerta: { x: -6.8, z: 2.6 },
+      caja: { x: -6.8, z: 0.4, w: 4.4, d: 1.4, h: 3.6 },
       cartelY: 4.6,
+    },
+    {
+      zona: 'ranking',
+      nombre: 'Los Más Buscados',
+      lema: 'Los cinco mejores del Oeste',
+      icono: 'ranking',
+      color: '#facc15',
+      puerta: { x: 0, z: 2.8 },
+      caja: { x: 0, z: -0.6, w: 9.4, d: 2.8, h: 8 },
+      cartelY: 9.1,
     },
     {
       zona: 'bar',
@@ -117,6 +136,16 @@ export const PUEBLO: Mundo = {
       cartelY: 7,
     },
     {
+      zona: 'sastreria',
+      nombre: 'La Sastrería',
+      lema: 'Viste a tu vaquero a tu gusto',
+      icono: 'sastreria',
+      color: '#f472b6',
+      puerta: { x: -24, z: 1.8 },
+      caja: { x: -24, z: -4, w: 6.6, d: 7, h: 6 },
+      cartelY: 7.2,
+    },
+    {
       zona: 'diligencia',
       nombre: 'Diligencia al desierto',
       lema: 'Incursiones, rango y entrenar',
@@ -134,12 +163,10 @@ export const PUEBLO: Mundo = {
     { m: 'Bld_Jail_01', x: -31, z: -3 },
     ...casa('pequena', -24, -1),
     ...casa('grande', -15, -1),
-    { m: 'Prop_HitchingPost_01', x: -8.2, z: 1.4 },
-    { m: 'Prop_WaterTrough_01', x: -6.2, z: 1.2 },
-    { m: 'Prop_Barrel_01', x: -4.6, z: -0.4 },
-    { m: 'Prop_Barrel_01', x: -4.1, z: 0.4, r: 40 },
-    { m: 'Prop_Crate_01', x: 4.4, z: -0.2, r: 15 },
-    { m: 'Prop_Sack_01', x: 5.3, z: 0.6 },
+    // En medio de la plaza va la tarima de Los Más Buscados (hecha a mano, no es un modelo).
+    { m: 'Prop_Barrel_01', x: 5.7, z: -0.4 },
+    { m: 'Prop_Barrel_01', x: 6.2, z: 0.4, r: 40 },
+    { m: 'Prop_Crate_01', x: 7.6, z: -0.2, r: 15 },
     { m: 'Bld_Well_01', x: 6.5, z: 9.5 },
     { m: 'Bld_Saloon_01', x: 17, z: -9.3 },
     ...casa('pequena', 29, -1, 2),
@@ -147,6 +174,7 @@ export const PUEBLO: Mundo = {
     { m: 'Prop_RoadSign_01', x: 34.5, z: 1.4, r: -20 },
     { m: 'Veh_Stagecoach_01', x: 40, z: 4.6, r: 90 },
     { m: 'Prop_HitchingPost_01', x: 24, z: 1.4 },
+    { m: 'Prop_WaterTrough_01', x: 26.2, z: 1.2 },
     { m: 'Prop_LogPile_01', x: 32, z: 0.6 },
     // El borde de abajo: valla, cactus y trastos (bajitos: no tapan la calle).
     { m: 'Prop_PikeFence_01', x: -20, z: 13.5 },

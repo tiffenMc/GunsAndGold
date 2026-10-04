@@ -11,6 +11,12 @@ import { ordenDeRevelado, sobreAlAzar, sobresDeInicio } from './sobres'
 import { xpDeSobre } from './progreso'
 import { apuntarPartida, diaDeHoy, estadoDeHoy, objetivosDelDia } from './objetivos'
 import type { EstadoObjetivo, Objetivo, PremioObjetivo } from './objetivos'
+import { cloneLook, isLook } from '../dollParams'
+import type { DollLook } from '../dollParams'
+import { MAX_ANIMACIONES, PRECIO_ANIMACION, articulo, articulosDePago, loQueFalta } from './tienda'
+import type { Moneda } from './tienda'
+import { problemaDelDibujo, repartir } from './animacionDibujada'
+import type { AnimacionDibujada, Punto } from './animacionDibujada'
 
 /**
  * Los jugadores de este dispositivo: cada uno con sus cartas desbloqueadas, sus barajas (hasta
@@ -62,6 +68,21 @@ export interface Player {
   monedas: number
   /** Lo que llevas de los objetivos del dia: `[id, progreso, reclamado]`. */
   objetivos: { id: string; hechos: number; reclamado: boolean; dia: string }[]
+  /** Lingotes de oro: salen jugando partidas de rango y se gastan en la Sastrería. */
+  lingotes: number
+  /** Diamantes: salen muy de vez en cuando al azar; para lo más especial de la Sastrería. */
+  diamantes: number
+  /**
+   * **Tu pinta**: cómo se ve tu vaquero por el pueblo y en Los Más Buscados. Si no hay, se ve como
+   * el muñeco de tu retrato.
+   */
+  pinta?: DollLook
+  /** Lo que has comprado en la Sastrería (ids de artículo, `sombrero:chistera`…). */
+  armario: string[]
+  /** Tus animaciones dibujadas. */
+  animaciones: AnimacionDibujada[]
+  /** La animación dibujada que lleva puesta tu vaquero (si no, dispara a lo normal). */
+  animacion: string | null
 }
 
 interface Saved {
@@ -98,7 +119,10 @@ function statLess(): Pick<Player, 'played' | 'won' | 'streak' | 'bestStreak' | '
 }
 
 /** Lo que trae de serie cualquier jugador: las seis caracteristicas, 100 monedas y los bolsillos. */
-function deSerie(): Pick<Player, 'progreso' | 'arquetipos' | 'caracteristicas' | 'caracteristicasEn' | 'monedas' | 'objetivos'> {
+function deSerie(): Pick<
+  Player,
+  'progreso' | 'arquetipos' | 'caracteristicas' | 'caracteristicasEn' | 'monedas' | 'objetivos' | 'lingotes' | 'diamantes' | 'armario' | 'animaciones' | 'animacion'
+> {
   return {
     progreso: {},
     arquetipos: {},
@@ -106,7 +130,17 @@ function deSerie(): Pick<Player, 'progreso' | 'arquetipos' | 'caracteristicas' |
     caracteristicasEn: Date.now(),
     monedas: 100,
     objetivos: [],
+    lingotes: 0,
+    diamantes: 0,
+    armario: [],
+    animaciones: [],
+    animacion: null,
   }
+}
+
+/** Una cantidad de monedas guardada (entera, de cero para arriba). */
+function cantidad(valor: unknown): number {
+  return typeof valor === 'number' && Number.isFinite(valor) ? Math.max(0, Math.round(valor)) : 0
 }
 
 /** A cada carta que ya tienes se le sortea su tipo de tirador (a las viejas, la primera vez). */
@@ -235,7 +269,21 @@ function clean(player: Player, cards: CardDef[]): Player {
     monedas: typeof player.monedas === 'number' ? Math.max(0, Math.round(player.monedas)) : 100,
     objetivos: Array.isArray(player.objetivos) ? player.objetivos : [],
     sobres: Array.isArray(player.sobres) ? player.sobres.filter((sobre) => Array.isArray(sobre)) : [],
+    lingotes: cantidad(player.lingotes),
+    diamantes: cantidad(player.diamantes),
+    pinta: isLook(player.pinta) ? cloneLook(player.pinta) : undefined,
+    armario: Array.isArray(player.armario) ? player.armario.filter((id) => typeof id === 'string' && Boolean(articulo(id))) : [],
+    animaciones: animacionesValidas(player.animaciones),
+    animacion: typeof player.animacion === 'string' && animacionesValidas(player.animaciones).some((a) => a.id === player.animacion) ? player.animacion : null,
   }
+}
+
+function animacionesValidas(lista: unknown): AnimacionDibujada[] {
+  if (!Array.isArray(lista)) return []
+  return lista
+    .filter((a): a is AnimacionDibujada => Boolean(a && typeof a === 'object' && typeof a.id === 'string' && Array.isArray(a.puntos)))
+    .map((a) => ({ id: a.id, nombre: String(a.nombre ?? 'Dibujo'), puntos: repartir(a.puntos) }))
+    .slice(0, MAX_ANIMACIONES)
 }
 
 function readState(): Saved {
@@ -699,4 +747,91 @@ export function usePlayers(): Player[] {
 function subscribe(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+// ---------------------------------------------------------------------------
+// Lingotes, diamantes y la Sastrería
+// ---------------------------------------------------------------------------
+
+/** Suma lo que te has llevado de una partida (lingotes y, si hay suerte, un diamante). */
+export function ganarBotin(botin: { lingotes: number; diamantes: number }): void {
+  const player = getPlayer()
+  patch({ ...player, lingotes: player.lingotes + cantidad(botin.lingotes), diamantes: player.diamantes + cantidad(botin.diamantes) })
+}
+
+/** El muñeco de tu retrato (con el que empezaste): de ahí sale tu pinta si aún no te has cambiado. */
+function lookDelRetrato(player: Player): DollLook {
+  const carta = todasLasCartasDelJuego().find((card) => card.id === player.avatar && card.kind === 'batalla')
+  return cloneLook(carta && carta.kind === 'batalla' ? carta.look : undefined)
+}
+
+/** Cómo se ve tu vaquero ahora mismo. */
+export function pintaDe(player: Player): DollLook {
+  return player.pinta ? cloneLook(player.pinta) : lookDelRetrato(player)
+}
+
+/** Si ya tienes un artículo (lo compraste, es gratis, venía con tu retrato, o eres el admin). */
+export function loTienes(player: Player, id: string): boolean {
+  const cosa = articulo(id)
+  if (!cosa) return false
+  if (!cosa.precio || player.admin) return true
+  return player.armario.includes(id) || articulosDePago(lookDelRetrato(player)).includes(id)
+}
+
+function pagar(player: Player, moneda: Moneda, precio: number): Player | null {
+  if (player.admin) return player
+  if (player[moneda] < precio) return null
+  return { ...player, [moneda]: player[moneda] - precio }
+}
+
+/** Compra un artículo de la Sastrería. Devuelve null si ha ido bien, o lo que ha fallado. */
+export function comprar(id: string): string | null {
+  const player = getPlayer()
+  const cosa = articulo(id)
+  if (!cosa) return 'Eso no está a la venta'
+  if (loTienes(player, id)) return 'Ya lo tienes'
+  const precio = cosa.precio!
+  const pagado = pagar(player, precio.moneda, precio.cantidad)
+  if (!pagado) return precio.moneda === 'lingotes' ? 'No te llegan los lingotes' : 'No te llegan los diamantes'
+  patch({ ...pagado, armario: [...pagado.armario, id] })
+  return null
+}
+
+/** Te pones una pinta. Solo vale si tienes todo lo que lleva. */
+export function ponerPinta(look: DollLook): string | null {
+  const player = getPlayer()
+  const falta = loQueFalta(look, []).filter((id) => !loTienes(player, id))
+  if (falta.length > 0) return `Te falta comprar: ${falta.map((id) => articulo(id)?.nombre ?? id).join(', ')}`
+  patch({ ...player, pinta: cloneLook(look) })
+  return null
+}
+
+/** Guarda un dibujo como animación nueva (y se la pone). Cuesta diamantes. */
+export function guardarAnimacion(nombre: string, puntos: Punto[]): string | null {
+  const player = getPlayer()
+  const problema = problemaDelDibujo(puntos)
+  if (problema) return problema
+  if (player.animaciones.length >= MAX_ANIMACIONES) return `Caben ${MAX_ANIMACIONES} animaciones: borra alguna`
+  const pagado = pagar(player, PRECIO_ANIMACION.moneda, PRECIO_ANIMACION.cantidad)
+  if (!pagado) return 'No te llegan los diamantes'
+  const nueva: AnimacionDibujada = { id: newId(), nombre: nombre.trim().slice(0, 24) || 'Mi floritura', puntos: repartir(puntos) }
+  patch({ ...pagado, animaciones: [...pagado.animaciones, nueva], animacion: nueva.id })
+  return null
+}
+
+/** Elige la animación dibujada que lleva tu vaquero (null = la de siempre). */
+export function ponerAnimacion(id: string | null): void {
+  const player = getPlayer()
+  if (id !== null && !player.animaciones.some((a) => a.id === id)) return
+  patch({ ...player, animacion: id })
+}
+
+export function borrarAnimacion(id: string): void {
+  const player = getPlayer()
+  patch({ ...player, animaciones: player.animaciones.filter((a) => a.id !== id), animacion: player.animacion === id ? null : player.animacion })
+}
+
+/** La animación dibujada que lleva puesta un jugador, si lleva. */
+export function animacionDe(player: Player): AnimacionDibujada | null {
+  return player.animaciones.find((a) => a.id === player.animacion) ?? null
 }
