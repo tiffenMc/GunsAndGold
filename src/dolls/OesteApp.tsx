@@ -588,7 +588,6 @@ export function OesteApp() {
   const [tutorial, setTutorial] = useState(false)
   /** La partida con un amigo (cuando ya estais los dos en la sala). */
   const [amigo, setAmigo] = useState<PartidaConAmigo | null>(null)
-  const ahora = useNow(1000)
   const cards = useGameCards()
 
   /** Ir a un sitio de golpe (el tutorial, o al acabar una partida). */
@@ -825,7 +824,7 @@ export function OesteApp() {
             )}
             {screen === 'mundo' && zona === 'incursiones' && (
               <PanelDelDesierto>
-                <Incursiones cards={cards} onAtras={salirALaCalle} onJugar={jugar} ahora={ahora} />
+                <IncursionesConReloj cards={cards} onAtras={salirALaCalle} onJugar={jugar} />
               </PanelDelDesierto>
             )}
             {screen === 'mundo' && zona === 'entrenar' && (
@@ -923,6 +922,15 @@ export function OesteApp() {
       </Column>
     </>
   )
+}
+
+/**
+ * Las incursiones con su reloj (la cuenta atrás va por segundos). El reloj va aquí dentro y no en la
+ * app: si no, cada segundo se volvería a pintar el juego entero, batalla incluida.
+ */
+function IncursionesConReloj(props: Omit<Parameters<typeof Incursiones>[0], 'ahora'>) {
+  const ahora = useNow(1000)
+  return <Incursiones {...props} ahora={ahora} />
 }
 
 /** Los paneles del desierto (incursiones y entrenar) por encima del mundo, a pantalla completa. */
