@@ -16,6 +16,13 @@ import {
 const cards = BUILTIN_CARDS
 
 describe('jugadores', () => {
+  // Tiene que ir el primero: mira el estado recien sembrado, sin nada guardado aun.
+  it('la primera vez el ADMIN puede jugar con su baraja tal cual (se juega con todas las clases)', () => {
+    const admin = getPlayer()
+    expect(admin.admin).toBe(true)
+    expect(deckProblem(admin.decks[0]!, admin.unlocked)).toBeNull()
+  })
+
   it('el ADMIN viene con todas las cartas y una baraja completa', () => {
     const admin = players().find((player) => player.admin)!
     expect(admin.unlocked).toHaveLength(cards.length)

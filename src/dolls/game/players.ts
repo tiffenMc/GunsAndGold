@@ -254,7 +254,9 @@ function readState(): Saved {
   } catch {
     // Datos rotos: se empieza de cero.
   }
-  return seed(cards)
+  const sembrado = seed(cards)
+  setClaseActiva(sembrado.players.find((player) => player.id === sembrado.current)?.clase ?? 'vaqueros')
+  return sembrado
 }
 
 /** La primera vez: el jugador ADMIN con todo, y un invitado con lo de siempre. */
