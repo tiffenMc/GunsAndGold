@@ -6,15 +6,16 @@
   "description": "Duelo en el Oeste: batallas de cartas de vaqueros en 3D, con patrones que se dibujan con el dedo",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc -p servidor --noEmit && vite build",
     "preview": "vite preview --port 4173",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p servidor --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "equilibrio": "vitest run src/dolls/battle/equilibrio.test.ts --mode equilibrio",
     "ajustar": "vitest run src/dolls/battle/ajustar.test.ts --mode ajuste",
     "amigos": "node scripts/puente.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "servidor": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",
@@ -29,6 +30,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261004.1",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

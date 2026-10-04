@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Icono } from '../Icono'
 import { movimientoDeDibujo } from '../game/animacionDibujada'
 import { players, usePlayer } from '../game/players'
-import { EN_LA_TARIMA, porcentajeDeVictorias, ranking } from '../game/ranking'
+import { EN_LA_TARIMA, porcentajeDeVictorias, ranking, useRanking } from '../game/ranking'
 import type { FichaDeBuscado } from '../game/ranking'
 import { PanelDeSitio } from './Zonas'
 import { VistaDeMuneco } from './VistaDeMuneco'
@@ -56,9 +56,10 @@ function Fila({ ficha, elegida, tuya, onClick }: { ficha: FichaDeBuscado; elegid
 
 export function BuscadosPanel({ onSalir, onJugar }: { onSalir: () => void; onJugar: () => void }) {
   const yo = usePlayer()
-  const lista = useMemo(() => ranking(players()), [yo])
+  const { fichas: lista, deTodos } = useRanking(players())
   const tarima = lista.slice(0, EN_LA_TARIMA)
-  const mia = lista.find((ficha) => ficha.id === yo.id)
+  // Tu puesto: en la lista si sales; si no (en el servidor solo llegan los 20 primeros), sin número.
+  const mia = lista.find((ficha) => ficha.id === yo.id) ?? (deTodos ? undefined : ranking(players()).find((f) => f.id === yo.id))
   const [elegida, setElegida] = useState<string | null>(tarima[0]?.id ?? null)
   const ficha = lista.find((f) => f.id === elegida) ?? tarima[0]
   const motion = useMemo(() => (ficha?.animacion ? movimientoDeDibujo(ficha.animacion, true) : null), [ficha?.animacion])
@@ -129,12 +130,18 @@ export function BuscadosPanel({ onSalir, onJugar }: { onSalir: () => void; onJug
               <p>
                 Vas el <b>{mia.puesto}º</b>. Te faltan <b>{Math.max(1, (tarima[EN_LA_TARIMA - 1]?.monedas ?? 0) - mia.monedas + 1)}</b> monedas para subir a la tarima.
               </p>
+            ) : yo.played > 0 ? (
+              <p>
+                Aún no estás entre los {lista.length} primeros. Para subir a la tarima necesitas más de{' '}
+                <b>{tarima[EN_LA_TARIMA - 1]?.monedas ?? 0}</b> monedas (tienes {yo.monedas}).
+              </p>
             ) : (
-              <p>Aún no has jugado ninguna partida de rango. Juega una y entrarás en la lista.</p>
+              <p>Aún no has jugado ninguna partida. Juega una de rango y entrarás en la lista.</p>
             )}
             <p className="mt-1.5 text-[12px] text-amber-200/60">
-              Manda el rango (las monedas de las partidas de rango). Por ahora la lista es de los personajes de este dispositivo; cuando el juego
-              tenga servidor, saldrán los mejores de todo el mundo.
+              {deTodos
+                ? 'Manda el rango (las monedas de las partidas de rango). La lista es la de todos los jugadores del Oeste.'
+                : 'Manda el rango (las monedas de las partidas de rango). Sin conexión con el servidor, la lista es la de los personajes de este dispositivo.'}
             </p>
             {!yo.admin && (
               <button type="button" onClick={onJugar} className="boton mt-2 w-full text-[14px]">

@@ -1,19 +1,26 @@
 import { useSyncExternalStore } from 'react'
+import { api, hayServidor } from '../../lib/servidor'
+import { conectarCuenta, desconectar } from './sincronizar'
 
 /**
- * Las **cuentas de este dispositivo**: usuario y contraseña, sin correo y sin confirmar nada. Es la
- * forma rápida de entrar en local mientras la nube (Supabase) está en pañales: si escribes un
- * usuario sin @, se crea aquí y entras al momento.
+ * Las **cuentas de usuario y contraseña**, sin correo y sin confirmar nada.
  *
- * La contraseña no se guarda tal cual: se guarda un resumen (un hash tonto). No es seguridad de
- * verdad —es un juego que corre en tu casa—, pero tampoco queda la clave escrita a la vista.
+ * - **Con servidor** (el juego publicado): la cuenta vive en el servidor, así que entras con ella
+ *   desde cualquier móvil y tus personajes te siguen. Aquí solo se guarda la sesión (`token`).
+ * - **Sin servidor** (`npm run dev`): la cuenta vive en este dispositivo, como siempre. La
+ *   contraseña se guarda resumida (un hash tonto: es un juego que corre en tu casa).
+ *
+ * Una cuenta de antes de este dispositivo se sube sola al servidor la primera vez que se entra con
+ * ella (mismo usuario y contraseña), con sus personajes.
  */
 
 interface CuentaLocal {
   usuario: string
-  /** El resumen de la contraseña. */
+  /** El resumen de la contraseña (solo en las cuentas sin servidor). */
   clave: string
   creada: number
+  /** La sesión del servidor (si la cuenta vive allí). */
+  token?: string
 }
 
 interface Guardado {
@@ -92,10 +99,53 @@ export function entrarLocal(usuario: string, clave: string): string | null {
   return null
 }
 
-/** Salir. */
+/** Salir (y, si la cuenta vive en el servidor, cerrar allí la sesión). */
 export function cerrarSesionLocal(): void {
-  estado = { ...estado, actual: null }
+  const cuenta = cuentaActual()
+  desconectar()
+  if (cuenta?.token) void api('/salir', { metodo: 'POST', token: cuenta.token, alSalir: true })
+  estado = { actual: null, cuentas: cuenta?.token ? quitarToken(estado.cuentas, cuenta) : estado.cuentas }
   persistir()
+}
+
+function quitarToken(cuentas: Record<string, CuentaLocal>, cuenta: CuentaLocal): Record<string, CuentaLocal> {
+  const id = normalizar(cuenta.usuario)
+  const { token: _token, ...sinToken } = cuenta
+  return { ...cuentas, [id]: sinToken }
+}
+
+/** Ya dentro en el servidor: trae (o sube) la partida y se queda la sesión. */
+async function quedarseDentro(usuario: string, token: string): Promise<string | null> {
+  const fallo = await conectarCuenta(`local:${usuario}`, token)
+  if (fallo) return fallo
+  const id = normalizar(usuario)
+  const antes = estado.cuentas[id]
+  estado = { cuentas: { ...estado.cuentas, [id]: { usuario, clave: antes?.clave ?? '', creada: antes?.creada ?? Date.now(), token } }, actual: id }
+  persistir()
+  return null
+}
+
+/** Crear cuenta: en el servidor si lo hay; si no, en este dispositivo. */
+export async function crearCuenta(usuario: string, clave: string): Promise<string | null> {
+  if (!(await hayServidor())) return crearCuentaLocal(usuario, clave)
+  const r = await api<{ usuario: string; token: string }>('/registro', { metodo: 'POST', cuerpo: { usuario, clave } })
+  if (!r.ok) return r.error
+  return quedarseDentro(r.datos.usuario, r.datos.token)
+}
+
+/** Entrar: en el servidor si lo hay; si no, con la cuenta de este dispositivo. */
+export async function entrar(usuario: string, clave: string): Promise<string | null> {
+  if (!(await hayServidor())) return entrarLocal(usuario, clave)
+  const r = await api<{ usuario: string; token: string }>('/entrar', { metodo: 'POST', cuerpo: { usuario, clave } })
+  if (r.ok) return quedarseDentro(r.datos.usuario, r.datos.token)
+  // ¿Es una cuenta de antes, de este dispositivo? Se sube al servidor tal cual (con sus personajes).
+  const vieja = estado.cuentas[normalizar(usuario)]
+  if (r.estado === 404 && vieja && !vieja.token && vieja.clave === resumen(clave)) {
+    const alta = await api<{ usuario: string; token: string }>('/registro', { metodo: 'POST', cuerpo: { usuario: vieja.usuario, clave } })
+    if (!alta.ok) return alta.error
+    return quedarseDentro(alta.datos.usuario, alta.datos.token)
+  }
+  return r.error
 }
 
 /** Las cuentas que hay en este dispositivo (para enseñarlas o borrarlas). */
