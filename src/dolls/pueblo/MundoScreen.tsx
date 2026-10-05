@@ -66,8 +66,8 @@ const ANDA = 7.5
 const CORRE = 15
 /** A partir de esta distancia, corre. */
 const LEJOS = 6
-/** Lo que se ve el salto de los atajos antes de entrar (ms). */
-const SALTO_MS = 380
+/** Lo que se ve el cartel del sitio (y el salto) al tocar un atajo, antes de entrar (ms). */
+const SALTO_MS = 1100
 /** La resolución más alta a la que se dibuja el mundo (más, y el móvil no da abasto). */
 const CALIDAD_MAX = typeof window === 'undefined' ? 1.5 : Math.min(1.5, window.devicePixelRatio)
 /** Lo cerca que hay que estar de una puerta para que salga el botón de entrar. */
@@ -117,11 +117,26 @@ export function MundoScreen(props: MundoProps) {
    * Los atajos de abajo: **salto** a la puerta (casi al instante, con su nube de polvo) y entra.
    * Para andar ya está el dedo; los atajos son para no esperar.
    */
+  const [anuncio, setAnuncio] = useState<Sitio | null>(null)
+  const relojDelAnuncio = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(relojDelAnuncio.current), [])
   const saltarAlSitio = (sitio: Sitio) => {
+    window.clearTimeout(relojDelAnuncio.current)
+    // Tocar otra vez el mismo atajo (o el cartel) entra ya, sin esperar.
+    if (anuncio?.zona === sitio.zona) {
+      setAnuncio(null)
+      entrar.current(sitio.zona)
+      return
+    }
     destino.current = null
     pos.current = { ...sitio.puerta }
     salto.current = { ...sitio.puerta, desde: performance.now() }
-    window.setTimeout(() => entrar.current(sitio.zona), SALTO_MS)
+    // Primero se dice qué es (el cartel de arriba) y enseguida se entra.
+    setAnuncio(sitio)
+    relojDelAnuncio.current = window.setTimeout(() => {
+      setAnuncio(null)
+      entrar.current(sitio.zona)
+    }, SALTO_MS)
   }
 
   return (
@@ -173,6 +188,24 @@ export function MundoScreen(props: MundoProps) {
 
       {children}
 
+      {/* Al tocar un atajo: qué es ese sitio (y se entra solo enseguida; tocándolo, al momento). */}
+      {anuncio && !pausado && (
+        <button
+          type="button"
+          onClick={() => saltarAlSitio(anuncio)}
+          className="sobre-entra absolute left-1/2 top-[18%] z-20 w-[min(340px,88vw)] -translate-x-1/2 overflow-hidden rounded-2xl border-2 bg-[#1a0f06]/92 px-4 py-3 text-center shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
+          style={{ borderColor: anuncio.color }}
+        >
+          <span className="block text-[34px] leading-none" style={{ color: anuncio.color }}>
+            <Icono nombre={anuncio.icono} />
+          </span>
+          <span className="mt-1 block font-west text-[22px] leading-none text-amber-50">{anuncio.nombre}</span>
+          <span className="mt-1 block text-[13px] font-bold leading-snug text-amber-100/80">{anuncio.lema}</span>
+          {info[anuncio.zona]?.texto && <span className="mt-0.5 block text-[12px] leading-snug text-amber-200/60">{info[anuncio.zona]!.texto}</span>}
+          <span className="absolute inset-x-0 bottom-0 h-1 origin-left bg-amber-300/80" style={{ animation: `llenar ${SALTO_MS}ms linear forwards` }} />
+        </button>
+      )}
+
       {/* Abajo: el botón de entrar (si estás en una puerta) y los atajos a cada sitio */}
       {!pausado && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 px-2 pb-[max(10px,env(safe-area-inset-bottom))]">
@@ -185,9 +218,11 @@ export function MundoScreen(props: MundoProps) {
               <Icono nombre={cerca.icono} /> {cerca.zona === 'diligencia' ? `Subir · ${cerca.nombre}` : `Entrar · ${cerca.nombre}`}
             </button>
           )}
+          {/* Todos los atajos a la vista, juntos (sin tener que deslizar). */}
           <nav
             data-tuto="atajos"
-            className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-2xl border-2 border-[#6b4423] bg-[#1a0f06]/85 p-1 backdrop-blur-[2px]"
+            className="pointer-events-auto grid w-full max-w-[600px] gap-0.5 rounded-2xl border-2 border-[#6b4423] bg-[#1a0f06]/85 p-1 backdrop-blur-[2px]"
+            style={{ gridTemplateColumns: `repeat(${mundo.sitios.length}, minmax(0, 1fr))` }}
           >
             {mundo.sitios.map((sitio) => {
               const aviso = info[sitio.zona]?.aviso ?? 0
@@ -197,12 +232,14 @@ export function MundoScreen(props: MundoProps) {
                   type="button"
                   data-tuto={`atajo-${sitio.zona}`}
                   onClick={() => saltarAlSitio(sitio)}
-                  className="relative flex min-w-[64px] flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10.5px] font-bold uppercase leading-tight tracking-wide text-amber-100/85 active:scale-95"
+                  className={`relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 text-[10.5px] font-bold leading-tight text-amber-100/85 active:scale-95 sm:text-[11.5px] ${
+                    anuncio?.zona === sitio.zona ? 'bg-amber-300/20' : ''
+                  }`}
                 >
-                  <span className="text-[22px]" style={{ color: sitio.color }}>
+                  <span className="text-[21px]" style={{ color: sitio.color }}>
                     <Icono nombre={sitio.icono} />
                   </span>
-                  {nombreCorto(sitio)}
+                  <span className="w-full truncate text-center">{nombreCorto(sitio)}</span>
                   {aviso > 0 && (
                     <span className="absolute right-1 top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-rose-600 px-1 text-[11px] text-white">
                       {aviso}

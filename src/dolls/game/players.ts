@@ -240,6 +240,15 @@ function persist() {
 }
 
 function clean(player: Player, cards: CardDef[]): Player {
+  const limpio = limpiarSinPinta(player, cards)
+  if (limpio.pinta) return limpio
+  // Los de antes no tenían pinta propia (se veían como su retrato): se les queda fija la de su
+  // retrato de ahora, con su ropa en el armario. Así cambiar de retrato ya no cambia el muñeco.
+  const pinta = lookDelRetrato(limpio)
+  return { ...limpio, pinta, armario: [...new Set([...limpio.armario, ...articulosDePago(pinta)])] }
+}
+
+function limpiarSinPinta(player: Player, cards: CardDef[]): Player {
   // El admin lo tiene todo (tambien lo que se añada al catalogo despues).
   const unlocked = player.admin
     ? cards.map((card) => card.id)
@@ -417,7 +426,10 @@ export function createPlayer(name: string, avatar: string, clase: ClaseId = 'vaq
     arquetipos: tiposDe(unlocked),
   }
   // La ropa del muñeco con el que empiezas es tuya.
-  player.armario = articulosDePago(lookDelRetrato(player))
+  // Tu muñeco empieza vestido como el de tu retrato, y esa ropa es tuya. Desde ahí es tuyo: cambiar
+  // de retrato después solo cambia la foto del cartel.
+  player.pinta = lookDelRetrato(player)
+  player.armario = articulosDePago(player.pinta)
   state = { players: [...state.players, player], current: player.id }
   persist()
   return player
@@ -768,7 +780,7 @@ function lookDelRetrato(player: Player): DollLook {
   return cloneLook(carta && carta.kind === 'batalla' ? carta.look : undefined)
 }
 
-/** Cómo se ve tu vaquero ahora mismo. */
+/** Cómo se ve tu vaquero ahora mismo (siempre su pinta; el retrato es solo la foto del cartel). */
 export function pintaDe(player: Player): DollLook {
   return player.pinta ? cloneLook(player.pinta) : lookDelRetrato(player)
 }

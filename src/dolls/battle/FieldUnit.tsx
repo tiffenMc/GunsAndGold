@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { Vector2 } from 'three'
-import type { Group, Mesh, MeshStandardMaterial, Sprite, SpriteMaterial } from 'three'
+import type { Group, Material, Mesh, Sprite, SpriteMaterial } from 'three'
 import { motionById, samplePose } from '../animations'
 import type { BurstStyle } from '../animations'
 import { DollBody } from '../DollBody'
@@ -14,7 +14,8 @@ import { SIDE_COLOR } from './Field'
 import { estiloDe, propDe } from './estilos'
 import { rarityInfo, rarityOf } from '../cards/model'
 import { AuraRareza } from './Effects'
-import { UnitBadge, UnitBase } from './UnitBadge'
+import { EtiquetaNombre, UnitBadge, UnitBase } from './UnitBadge'
+import { papelDe } from './papeles'
 import { EstadosUnidad, aplicarPose } from './PosesHabilidad'
 
 type Act = 'mover' | 'quieto' | 'disparar' | 'impacto' | 'caer' | 'morir' | 'roto'
@@ -34,6 +35,25 @@ function mixHex(a: string, b: string, k: number): string {
       .toString(16)
       .padStart(2, '0')
   return `#${c(0)}${c(1)}${c(2)}`
+}
+
+/**
+ * La copia a medias (transparente) de un material, para un muñeco entre el humo. Los materiales de
+ * los muñecos son de todos (uno para todo el ejército): si se tocara el de verdad, se pondrían a
+ * medias todos a la vez. Así solo cambia el que está en el humo.
+ */
+const fantasmas = new WeakMap<Material, Material>()
+function fantasmaDe(material: Material): Material {
+  let copia = fantasmas.get(material)
+  if (!copia) {
+    copia = material.clone()
+    copia.onBeforeCompile = material.onBeforeCompile
+    copia.transparent = true
+    copia.opacity = material.opacity * 0.4
+    copia.depthWrite = false
+    fantasmas.set(material, copia)
+  }
+  return copia
 }
 
 function wrapAngle(a: number): number {
@@ -101,11 +121,18 @@ export function FieldUnit({
         g.visible = look !== 'oculto'
         const ghosted = look === 'fantasma'
         g.traverse((obj) => {
-          const material = (obj as Mesh).material as MeshStandardMaterial | undefined
-          if (!material || Array.isArray(material)) return
-          material.transparent = ghosted
-          material.opacity = ghosted ? 0.4 : 1
-          material.needsUpdate = true
+          const mesh = obj as Mesh
+          if (!mesh.isMesh) return
+          const datos = mesh.userData as { original?: Material }
+          if (ghosted) {
+            const material = mesh.material
+            if (!material || Array.isArray(material) || datos.original) return
+            datos.original = material
+            mesh.material = fantasmaDe(material)
+          } else if (datos.original) {
+            mesh.material = datos.original
+            delete datos.original
+          }
         })
       }
       g.position.set(unit.x, 0, unit.z)
@@ -193,6 +220,7 @@ export function FieldUnit({
   }
 
   const height = useMemo(() => proportions(card.look).H, [card.look])
+  const papel = papelDe(card)
 
   return (
     <group ref={group} position={[unit.x, 0, unit.z]} rotation={[0, unit.heading, 0]}>
@@ -238,7 +266,16 @@ export function FieldUnit({
       {act !== 'roto' && act !== 'morir' && <EstadosUnidad unit={unit} battle={battle} alto={height * UNIT_SCALE * tam + (torre ? 0.93 : 0)} color={color} />}
       {act !== 'roto' && act !== 'morir' && (
         // La barra de escudos del bando: una sola imagen por soldado.
-        <UnitBadge escudos={shields} maximo={Math.max(unit.maxShields, unit.baseShields)} color={color} y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)} />
+        <UnitBadge
+          escudos={shields}
+          maximo={Math.max(unit.maxShields, unit.baseShields)}
+          color={color}
+          papel={papel}
+          y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)}
+        />
+      )}
+      {act !== 'roto' && act !== 'morir' && (
+        <EtiquetaNombre nombre={card.name} papel={papel} color={color} y={height * UNIT_SCALE * tam + 1.6 + (torre ? 0.93 : 0)} />
       )}
     </group>
   )

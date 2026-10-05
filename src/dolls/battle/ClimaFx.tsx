@@ -93,8 +93,12 @@ function Cielo({ cae }: { cae: ClimaInfo }) {
   )
 }
 
-/** El rayo de la tormenta: un fogonazo de luz y su trueno, cada pocos segundos. */
-function Rayos() {
+/**
+ * El rayo de la tormenta: un fogonazo de luz y su trueno, cada pocos segundos. La luz está siempre
+ * (apagada si no hay tormenta): si apareciera y desapareciera, la tarjeta gráfica tendría que
+ * recompilar todos los materiales y la partida se pararía.
+ */
+function Rayos({ activos }: { activos: boolean }) {
   const luz = useRef<DirectionalLight>(null)
   const proximo = useRef(2 + Math.random() * 4)
   const apagado = useRef(0)
@@ -102,6 +106,10 @@ function Rayos() {
   useFrame((_, dt) => {
     const flash = luz.current
     if (!flash) return
+    if (!activos) {
+      flash.intensity = 0
+      return
+    }
     if (apagado.current > 0) {
       apagado.current -= dt
       flash.intensity = apagado.current > 0 ? 3.2 : 0
@@ -121,11 +129,10 @@ function Rayos() {
 
 /** El tiempo de la partida: la lluvia o la nieve, y los rayos si es tormenta. */
 export function ClimaFx({ info }: { info: ClimaInfo }) {
-  if (info.cae === 'nada' && !info.rayos) return null
   return (
     <group>
       {info.cae !== 'nada' && <Cielo cae={info} />}
-      {info.rayos && <Rayos />}
+      <Rayos activos={Boolean(info.rayos)} />
     </group>
   )
 }
