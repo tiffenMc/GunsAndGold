@@ -283,7 +283,11 @@ export function GameCard({
       {/* Un solo numero arriba: su fuerza (las cifras sueltas se ven en la ficha) */}
       {owned && (
         // La gema de la fuerza: un escudo con bisel, del color de su rareza
-        <span className="absolute left-[4%] top-[3%] drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]" style={{ width: '23cqw', height: '26cqw' }}>
+        <span
+          className="absolute left-[4%] drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]"
+          title="Fuerza de la carta (1-6)"
+          style={{ top: card.kind === 'batalla' ? '17%' : '3%', width: '23cqw', height: '26cqw' }}
+        >
           <span className="absolute inset-0 bg-black/85" style={{ clipPath: ESCUDO }} />
           <span
             className="absolute flex items-center justify-center font-west leading-none text-white"
@@ -298,27 +302,32 @@ export function GameCard({
           >
             {strength}
           </span>
+          {/* (Para que se sepa qué es ese número.) */}
+          <span
+            className="absolute left-1/2 -translate-x-1/2 rounded-[1cqw] bg-black/80 px-[1.2cqw] font-black uppercase leading-none tracking-wide text-amber-100"
+            style={{ bottom: '-5cqw', fontSize: '4.4cqw', paddingTop: '0.6cqw', paddingBottom: '0.6cqw' }}
+          >
+            Fuerza
+          </span>
         </span>
       )}
 
-      {/* El sello de la carta, estampado encima del nombre: lo primero que se ve */}
+      {/* Arriba, como parte del marco: el sello escrito y de su color (el tanque gris, el apoyo rosa…) */}
       {card.kind === 'batalla' && (() => {
         const sello = infoDeSello(card)
         return (
           <span
-            className="absolute right-[4%] flex items-center justify-center rounded-full border-[1.2cqw] shadow-[0_1cqw_2cqw_rgba(0,0,0,0.7)]"
-            title={`Sello: ${sello.label}`}
+            className="absolute inset-x-[3%] top-[2.5%] flex items-center justify-center rounded-[2.2cqw] font-west uppercase leading-none text-white"
             style={{
-              bottom: '23%',
-              width: '24cqw',
-              height: '24cqw',
-              fontSize: '13cqw',
-              borderColor: sello.color,
-              background: `radial-gradient(circle at 35% 30%, ${sello.color}55, #140a04 70%)`,
-              opacity: owned ? 1 : 0.5,
+              height: '13%',
+              fontSize: sello.label.length > 8 ? '9cqw' : '10.5cqw',
+              background: `linear-gradient(180deg, ${sello.color} 0%, ${sello.color} 60%, #00000066 140%)`,
+              boxShadow: 'inset 0 0 0 0.7cqw #1a0d04, 0 1cqw 2cqw rgba(0,0,0,0.5)',
+              textShadow: '0 0.5cqw 0 #1a0d04, 0.4cqw 0 0 #1a0d04, -0.4cqw 0 0 #1a0d04, 0 -0.4cqw 0 #1a0d04',
+              opacity: owned ? 1 : 0.55,
             }}
           >
-            {sello.icono}
+            {sello.label}
           </span>
         )
       })()}

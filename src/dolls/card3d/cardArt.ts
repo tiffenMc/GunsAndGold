@@ -68,39 +68,6 @@ export function drawPatternGlyph(
   ctx.restore()
 }
 
-function shieldPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  ctx.beginPath()
-  ctx.moveTo(cx, cy - s)
-  ctx.quadraticCurveTo(cx + s * 0.55, cy - s * 0.72, cx + s * 0.9, cy - s * 0.78)
-  ctx.quadraticCurveTo(cx + s * 0.95, cy + s * 0.3, cx, cy + s)
-  ctx.quadraticCurveTo(cx - s * 0.95, cy + s * 0.3, cx - s * 0.9, cy - s * 0.78)
-  ctx.quadraticCurveTo(cx - s * 0.55, cy - s * 0.72, cx, cy - s)
-  ctx.closePath()
-}
-
-function burstPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  ctx.beginPath()
-  for (let i = 0; i < 16; i++) {
-    const r = i % 2 === 0 ? s : s * 0.5
-    const a = -Math.PI / 2 + (i * Math.PI) / 8
-    const px = cx + Math.cos(a) * r
-    const py = cy + Math.sin(a) * r
-    if (i === 0) ctx.moveTo(px, py)
-    else ctx.lineTo(px, py)
-  }
-  ctx.closePath()
-}
-
-/** Reloj de agujas de las especiales: lo que dura su jugada. */
-function clockPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  ctx.beginPath()
-  ctx.arc(cx, cy, s * 0.82, 0, Math.PI * 2)
-  ctx.moveTo(cx, cy - s * 0.5)
-  ctx.lineTo(cx, cy)
-  ctx.lineTo(cx + s * 0.42, cy + s * 0.2)
-  ctx.stroke()
-}
-
 function fitFont(ctx: CanvasRenderingContext2D, text: string, family: string, max: number, maxWidth: number): number {
   let size = max
   while (size > 18) {
@@ -116,47 +83,43 @@ const TITLE_FONT = '"Rye", "Cinzel", Georgia, serif'
 /** Icono de las chapas de arriba: golpe (daño), escudo (vida) o reloj (duracion). */
 type BadgeIcon = 'escudo' | 'golpe' | 'reloj'
 
-/** Chapa con icono y numero grande: el daño arriba a un lado y el escudo al otro. */
-function statBadge(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  icon: BadgeIcon,
-  text: string,
-  color: string,
-  alignRight: boolean,
-) {
-  ctx.font = `bold 46px Georgia, serif`
-  const textW = ctx.measureText(text).width
-  const w = textW + 86
-  const h = 66
+/** Un dato de la carta: su nombre escrito arriba ("DAÑO", "ESCUDOS"…) y el número bien grande. */
+function datoGrande(ctx: CanvasRenderingContext2D, x: number, y: number, dato: FrameInfo['left'], alignRight: boolean) {
+  ctx.font = `bold 66px Georgia, serif`
+  const numW = ctx.measureText(dato.text).width
+  ctx.font = `900 25px system-ui, sans-serif`
+  const labW = ctx.measureText(dato.label.toUpperCase()).width
+  const w = Math.max(numW + 30, labW + 24, 112)
+  const h = 108
   const bx = alignRight ? x - w : x
-  ctx.fillStyle = 'rgba(12,7,3,0.92)'
-  roundRect(ctx, bx, y, w, h, 16)
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.7)'
+  ctx.shadowBlur = 12
+  ctx.fillStyle = 'rgba(12,7,3,0.95)'
+  roundRect(ctx, bx, y, w, h, 18)
   ctx.fill()
-  ctx.strokeStyle = color
-  ctx.lineWidth = 4
-  roundRect(ctx, bx, y, w, h, 16)
+  ctx.restore()
+  ctx.strokeStyle = dato.color
+  ctx.lineWidth = 6
+  roundRect(ctx, bx, y, w, h, 18)
   ctx.stroke()
-  const ix = bx + 36
-  const iy = y + h / 2
-  ctx.strokeStyle = color
-  ctx.lineWidth = 4
-  if (icon === 'escudo') {
-    shieldPath(ctx, ix, iy, 21)
-    ctx.fillStyle = color
-    ctx.fill()
-  } else if (icon === 'reloj') {
-    clockPath(ctx, ix, iy, 22)
-  } else {
-    burstPath(ctx, ix, iy, 24)
-    ctx.fillStyle = color
-    ctx.fill()
-  }
-  ctx.fillStyle = '#fff7e6'
-  ctx.textAlign = 'left'
+  // El nombre del dato, en una cinta de su color.
+  ctx.fillStyle = dato.color
+  roundRect(ctx, bx + 7, y + 7, w - 14, 32, 9)
+  ctx.fill()
+  ctx.fillStyle = '#140a04'
+  ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, bx + 66, iy + 2)
+  ctx.font = `900 25px system-ui, sans-serif`
+  ctx.fillText(dato.label.toUpperCase(), bx + w / 2, y + 24)
+  // El número, bien grande.
+  ctx.font = `bold 66px Georgia, serif`
+  ctx.lineWidth = 8
+  ctx.lineJoin = 'round'
+  ctx.strokeStyle = '#1a0d04'
+  ctx.strokeText(dato.text, bx + w / 2, y + 74)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(dato.text, bx + w / 2, y + 74)
 }
 
 export interface FrameInfo {
@@ -166,11 +129,12 @@ export interface FrameInfo {
   /** La rareza manda en el marco: color, remaches y galones. */
   rarity: Rarity
   rarityColor: string
-  left: { icon: BadgeIcon; text: string; color: string }
-  right: { icon: BadgeIcon; text: string; color: string }
+  /** Los dos datos de la carta, con su nombre escrito (para que se sepa qué es cada número). */
+  left: { icon: BadgeIcon; text: string; color: string; label: string }
+  right: { icon: BadgeIcon; text: string; color: string; label: string }
   pattern?: Pt[]
-  /** El sello de la carta de batalla: va estampado en la esquina del retrato. */
-  sello?: { label: string; color: string; icono: string }
+  /** La franja de arriba del marco: el sello escrito en grande (o "ARMA", "ESPECIAL"), de su color. */
+  banda: { texto: string; color: string }
 }
 
 export function frameInfo(card: CardDef): FrameInfo {
@@ -182,12 +146,12 @@ export function frameInfo(card: CardDef): FrameInfo {
     return {
       ...rareza,
       name: card.name,
-      sub: `${sello.label} · ${LEVEL_LABEL[level]}`,
+      sub: `Trazo ${LEVEL_LABEL[level].toLowerCase()}`,
       accent: card.accent,
-      sello: { label: sello.label, color: sello.color, icono: sello.icono },
+      banda: { texto: sello.label, color: sello.color },
       // (Los números de verdad en la partida: con lo que les cambia su sello.)
-      left: { icon: 'golpe', text: String(Math.round(card.damage * sello.mods.soldado.fuerte)), color: '#fca5a5' },
-      right: { icon: 'escudo', text: String(Math.max(1, Math.round(card.shields * sello.mods.soldado.escudos))), color: '#7dd3fc' },
+      left: { icon: 'golpe', text: String(Math.round(card.damage * sello.mods.soldado.fuerte)), color: '#f87171', label: 'Daño' },
+      right: { icon: 'escudo', text: String(Math.max(1, Math.round(card.shields * sello.mods.soldado.escudos))), color: '#60a5fa', label: 'Escudos' },
       pattern: patternById(card.pattern).points,
     }
   }
@@ -197,20 +161,22 @@ export function frameInfo(card: CardDef): FrameInfo {
     return {
       ...rareza,
       name: card.name,
-      sub: 'Especial · 1 uso',
+      sub: '1 uso',
       accent: card.accent,
-      left: { icon: 'golpe', text: '0', color: '#94a3b8' },
-      right: { icon: 'reloj', text: `${special.seconds}s`, color: '#fcd34d' },
+      banda: { texto: 'Especial', color: '#e879f9' },
+      left: { icon: 'golpe', text: '0', color: '#94a3b8', label: 'Daño' },
+      right: { icon: 'reloj', text: `${special.seconds}s`, color: '#fcd34d', label: 'Dura' },
     }
   }
   const mode = SHOT_MODES.find((item) => item.id === card.shot.mode)
   return {
     ...rareza,
     name: card.name,
-    sub: `Arma · ${mode?.label ?? ''}`,
+    sub: mode?.label ?? '',
     accent: card.accent,
-    left: { icon: 'escudo', text: `-${card.shot.shieldsPerHit}`, color: '#7dd3fc' },
-    right: { icon: 'golpe', text: `${Math.round(card.shot.range)}m`, color: '#fcd34d' },
+    banda: { texto: 'Arma', color: '#d6a36a' },
+    left: { icon: 'escudo', text: `-${card.shot.shieldsPerHit}`, color: '#60a5fa', label: 'Quita' },
+    right: { icon: 'golpe', text: `${Math.round(card.shot.range)}m`, color: '#fcd34d', label: 'Alcance' },
   }
 }
 
@@ -339,22 +305,51 @@ function paintFrame(ctx: CanvasRenderingContext2D, info: FrameInfo) {
   roundRect(ctx, wx0 - 8, wy0 - 8, wx1 - wx0 + 16, wy1 - wy0 + 16, 24)
   ctx.stroke()
 
-  // Arriba: estadisticas a los lados y el patron en medio.
-  statBadge(ctx, 30, 18, info.left.icon, info.left.text, info.left.color, false)
-  statBadge(ctx, w - 30, 18, info.right.icon, info.right.text, info.right.color, true)
-  if (info.pattern) {
-    const size = 64
-    const gx = w / 2 - size / 2
-    const gy = 20
-    ctx.fillStyle = 'rgba(12,7,3,0.92)'
-    roundRect(ctx, gx - 4, gy - 2, size + 8, size + 6, 14)
+  // Arriba, como parte del marco: la franja del sello escrita en grande y de su color (siempre el
+  // mismo: el apoyo rosa, el tanque gris, el asesino rojo…). A la derecha, el trazo que hay que dibujar.
+  {
+    const by = 16
+    const bh = 76
+    const bx = 26
+    const bw = w - 52
+    const franja = ctx.createLinearGradient(0, by, 0, by + bh)
+    franja.addColorStop(0, tono(info.banda.color, 0.25))
+    franja.addColorStop(0.5, info.banda.color)
+    franja.addColorStop(1, tono(info.banda.color, -0.35))
+    ctx.fillStyle = franja
+    roundRect(ctx, bx, by, bw, bh, 18)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(224,180,99,0.8)'
-    ctx.lineWidth = 3
-    roundRect(ctx, gx - 4, gy - 2, size + 8, size + 6, 14)
+    ctx.strokeStyle = '#1a0d04'
+    ctx.lineWidth = 5
+    roundRect(ctx, bx, by, bw, bh, 18)
     ctx.stroke()
-    drawPatternGlyph(ctx, info.pattern, gx + 6, gy + 6, size - 12, '#f5d69a', 5)
+    const glifo = info.pattern ? 60 : 0
+    const texto = info.banda.texto.toUpperCase()
+    const ancho = bw - (glifo ? glifo + 34 : 24)
+    const tam = fitFont(ctx, texto, TITLE_FONT, 58, ancho)
+    ctx.font = `${tam}px ${TITLE_FONT}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const tx = bx + 12 + ancho / 2
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 9
+    ctx.strokeStyle = '#1a0d04'
+    ctx.strokeText(texto, tx, by + bh / 2 + 3)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(texto, tx, by + bh / 2 + 3)
+    if (info.pattern) {
+      const gx = bx + bw - glifo - 10
+      const gy = by + (bh - glifo) / 2
+      ctx.fillStyle = 'rgba(12,7,3,0.9)'
+      roundRect(ctx, gx, gy, glifo, glifo, 12)
+      ctx.fill()
+      drawPatternGlyph(ctx, info.pattern, gx + 8, gy + 8, glifo - 16, '#f5d69a', 5)
+    }
   }
+
+  // Los dos datos, grandes y con su nombre: abajo del retrato, uno a cada lado.
+  datoGrande(ctx, wx0 - 6, wy1 - 96, info.left, false)
+  datoGrande(ctx, wx1 + 6, wy1 - 96, info.right, true)
 
   // Abajo: la chapa con el nombre bien grande.
   const plateY = wy1 + 14
@@ -380,37 +375,10 @@ function paintFrame(ctx: CanvasRenderingContext2D, info: FrameInfo) {
   ctx.strokeText(title, w / 2, plateY + plateH * 0.42)
   ctx.fillStyle = '#fff3d6'
   ctx.fillText(title, w / 2, plateY + plateH * 0.42)
-  ctx.font = `${info.sello ? 700 : 600} 22px "Cinzel", Georgia, serif`
-  ctx.fillStyle = info.sello?.color ?? info.accent
+  ctx.font = `600 22px "Cinzel", Georgia, serif`
+  ctx.fillStyle = info.accent
   ctx.fillText(info.sub.toUpperCase(), w / 2, plateY + plateH * 0.8)
 
-  // El sello, estampado en la esquina del retrato: lo primero que se ve de la carta.
-  if (info.sello) {
-    const r = 46
-    const cx = wx0 + 26
-    const cy = wy1 - 22
-    ctx.save()
-    ctx.shadowColor = 'rgba(0,0,0,0.6)'
-    ctx.shadowBlur = 10
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.fillStyle = '#140a04'
-    ctx.fill()
-    ctx.restore()
-    ctx.beginPath()
-    ctx.arc(cx, cy, r - 5, 0, Math.PI * 2)
-    ctx.lineWidth = 7
-    ctx.strokeStyle = info.sello.color
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.arc(cx, cy, r - 13, 0, Math.PI * 2)
-    ctx.fillStyle = tono(info.sello.color, -0.55)
-    ctx.fill()
-    ctx.font = `44px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(info.sello.icono, cx, cy + 2)
-  }
 }
 
 function makeTexture(canvas: HTMLCanvasElement): CanvasTexture {

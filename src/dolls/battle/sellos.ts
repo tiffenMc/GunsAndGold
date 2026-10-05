@@ -45,8 +45,7 @@ const IGUAL: Mods = { escudos: 1, velocidad: 1, golpe: 1, cadencia: 1, alcance: 
 export interface SelloInfo {
   id: Sello
   label: string
-  /** Un emoji, para la página (el lienzo de la carta dibuja el suyo). */
-  icono: string
+  /** Siempre el mismo para cada sello: el tanque gris, el asesino rojo, el área azul, el apoyo rosa… */
   color: string
   /** Para qué sirve, en una línea. */
   nota: string
@@ -61,8 +60,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   tanque: {
     id: 'tanque',
     label: 'Tanque',
-    icono: '🛡️',
-    color: '#94a3b8',
+    color: '#9ca3af',
     nota: 'Aguanta delante y se come los tiros',
     soldado: ['Muy lento', 'El doble de escudos', 'Atrae los disparos de los rivales', 'Pega poco'],
     torre: ['Mucho alcance y mucha vida', 'No pega: frena a los que entran (y algunos aturden o congelan)'],
@@ -76,8 +74,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   asesino: {
     id: 'asesino',
     label: 'Asesino',
-    icono: '🗡️',
-    color: '#f43f5e',
+    color: '#ef4444',
     nota: 'Rapidísimo y letal: va a por los tanques',
     soldado: ['Muy rápido', 'Pocos escudos', 'Quita muchísimo', 'Va primero a por los tanques'],
     torre: ['Golpea muy rápido y quita mucho', 'Poca defensa y poco alcance'],
@@ -91,8 +88,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   distancia: {
     id: 'distancia',
     label: 'Distancia',
-    icono: '🎯',
-    color: '#38bdf8',
+    color: '#22c55e',
     nota: 'Tira desde lejos a un solo blanco, hasta tumbarlo',
     soldado: ['Dispara desde muy lejos', 'Marca a un rival y no lo suelta', 'Nunca en área', 'Tarda en recargar'],
     torre: ['Muchísimo alcance', 'Dispara despacio'],
@@ -106,8 +102,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   apoyo: {
     id: 'apoyo',
     label: 'Apoyo',
-    icono: '➕',
-    color: '#4ade80',
+    color: '#ec4899',
     nota: 'No pega: cura a los suyos',
     soldado: ['No ataca', 'Cura en área o a uno solo (cada uno a su manera)'],
     torre: ['Junto a una torre o a tus soldados, los va curando', 'Poca vida'],
@@ -121,8 +116,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   area: {
     id: 'area',
     label: 'Área',
-    icono: '💥',
-    color: '#fb923c',
+    color: '#3b82f6',
     nota: 'Revienta grupos: cada golpe da a todos los de alrededor',
     soldado: ['Golpes en área, lentos', 'Quita mucho', 'Pocos escudos'],
     torre: ['Daño en área', 'Alcance medio y poca vida'],
@@ -136,8 +130,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   asalto: {
     id: 'asalto',
     label: 'Asalto',
-    icono: '🔫',
-    color: '#fbbf24',
+    color: '#f59e0b',
     nota: 'El pistolero de siempre: bueno en todo',
     soldado: ['Normal en todo'],
     torre: ['Normal en todo'],
@@ -148,8 +141,7 @@ export const SELLOS: Record<Sello, SelloInfo> = {
   control: {
     id: 'control',
     label: 'Control',
-    icono: '🌀',
-    color: '#c084fc',
+    color: '#a855f7',
     nota: 'Como un mago: aturde, frena, empuja o congela',
     soldado: ['Lento', 'Poco daño y alcance medio', 'Sus golpes aturden, frenan, empujan o congelan (algunos, en área)'],
     torre: ['Bastante defensa y poco alcance', 'No pega: frena, aturde o empuja a los que entran'],
