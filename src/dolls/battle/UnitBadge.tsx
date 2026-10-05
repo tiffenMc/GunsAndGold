@@ -57,6 +57,12 @@ function textura(escudos: number, maximo: number, color: string): CanvasTexture 
 }
 
 /** La barra de escudos del soldado. `y` es la altura a la que flota. */
+/** Cuántos circulitos se pintan y lo que mide cada uno en el campo (para saber dónde está cada escudo). */
+export function medidaDeEscudos(escudos: number, maximo: number): { total: number; pip: number } {
+  const total = Math.min(10, Math.max(1, Math.max(maximo, escudos)))
+  return { total, pip: total > 6 ? PIP_MUNDO * (6 / total) ** 0.5 : PIP_MUNDO }
+}
+
 export function UnitBadge({ escudos, maximo, color, y }: { escudos: number; maximo: number; color: string; y: number }) {
   const total = Math.min(10, Math.max(1, Math.max(maximo, escudos)))
   const llenos = Math.min(total, Math.max(0, Math.ceil(escudos)))

@@ -24,6 +24,13 @@ const PRUEBA_MESA = 2500
 const PRUEBA_MS = 2500
 
 const RUTA = `${import.meta.env.BASE_URL}sonidos/partida.mp3`
+/**
+ * La cancion es **de ambiente**, no la protagonista: suena a menos de la mitad de lo que marque la
+ * barra de los ajustes y con los agudos apagados (como si sonara en el saloon de al lado), asi
+ * los tiros, los golpes y las voces se oyen siempre por encima.
+ */
+const AMBIENTE = 0.4
+const AGUDOS_HZ = 1300
 
 let pista: HTMLAudioElement | null = null
 let mesa: AudioContext | null = null
@@ -66,7 +73,11 @@ function mezcladora(audio: HTMLAudioElement): GainNode | null {
     ctx = new Ctor()
     ganancia = ctx.createGain()
     ganancia.gain.value = 0
-    ctx.createMediaElementSource(audio).connect(ganancia).connect(ctx.destination)
+    const filtro = ctx.createBiquadFilter()
+    filtro.type = 'lowpass'
+    filtro.frequency.value = AGUDOS_HZ
+    filtro.Q.value = 0.4
+    ctx.createMediaElementSource(audio).connect(filtro).connect(ganancia).connect(ctx.destination)
   } catch {
     sinMesa = true
     return null
@@ -148,7 +159,7 @@ function arrancar() {
     reanudarConGesto()
   }
   if (audio.paused) void audio.play().catch(() => esperarGesto(audio))
-  fundir(musicVolume(), FUNDIDO)
+  fundir(musicVolume() * AMBIENTE, FUNDIDO)
   // Con ?manual en la direccion se mira desde la consola: __musica.paused, __volumen.gain.value…
   if (MANUAL) Object.assign(window, { __musica: audio, __volumen: mando, __mesa: mesa })
 }

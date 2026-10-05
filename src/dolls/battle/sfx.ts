@@ -147,7 +147,7 @@ function rutaBatalla(nombre: string): string {
 
 /** Deja listos los sonidos de batalla. Se llama al empezar la partida. */
 export function precargarBatalla(): Promise<unknown> {
-  return precargarSonidos(BATALLA.map(rutaBatalla))
+  return precargarSonidos([...BATALLA.map(rutaBatalla), ...[...new Set(Object.values(ARCHIVO_TROPA)), 'escudo'].map(rutaTropa)])
 }
 
 let ultimaBala = 0
@@ -177,17 +177,33 @@ export function bala(tuyo = true): void {
 export type SonidoDeTropa = 'revolver' | 'rifle' | 'escopeta' | 'dinamita' | 'bufalo' | 'gatling' | 'golpe' | 'flecha' | 'nada'
 
 const VOLUMEN_TROPA: Record<SonidoDeTropa, number> = {
-  revolver: 0.16,
-  rifle: 0.2,
-  escopeta: 0.18,
-  dinamita: 0.2,
-  bufalo: 0.22,
-  gatling: 0.1,
+  revolver: 0.17,
+  rifle: 0.19,
+  escopeta: 0.2,
+  dinamita: 0.24,
+  bufalo: 0.26,
+  gatling: 0.12,
   golpe: 0.2,
-  flecha: 0.14,
+  flecha: 0.16,
   nada: 0,
 }
 const ultimoDe = new Map<SonidoDeTropa, number>()
+
+/** El archivo de cada tipo (`public/sonidos/tropa/`, hechos con `herramientas/fabricar_sonidos.py`). */
+const ARCHIVO_TROPA: Record<Exclude<SonidoDeTropa, 'nada'>, string> = {
+  revolver: 'revolver',
+  rifle: 'rifle',
+  escopeta: 'escopeta',
+  dinamita: 'dinamita',
+  bufalo: 'canon',
+  gatling: 'gatling',
+  golpe: 'golpe',
+  flecha: 'flecha',
+}
+
+function rutaTropa(nombre: string): string {
+  return `${import.meta.env.BASE_URL}sonidos/tropa/${nombre}.wav`
+}
 
 export function tiroDeTropa(tipo: SonidoDeTropa, tuyo = true): void {
   if (tipo === 'nada') return
@@ -198,24 +214,30 @@ export function tiroDeTropa(tipo: SonidoDeTropa, tuyo = true): void {
   ultimoDe.set(tipo, ahora)
   ultimaBala = ahora
   const volumen = VOLUMEN_TROPA[tipo] * (tuyo ? 1 : 0.55)
-  if (tipo === 'flecha') {
-    // El silbido de la flecha (o la lanza) al salir.
-    burst(volumen, 0.16, 3600, 'bandpass')
-    tone(900, 520, 0.12, volumen * 0.25, 'sine')
-    return
-  }
-  if (tipo === 'golpe') {
-    // Un zas de aire y un golpe sordo.
-    burst(volumen, 0.12, 1400, 'bandpass')
-    tone(140, 70, 0.1, volumen * 0.6, 'triangle')
-    return
-  }
-  const sample = sonido(rutaDisparo(tipo))
+  const sample = sonido(rutaTropa(ARCHIVO_TROPA[tipo]))
   if (!sample) {
     bala(tuyo)
     return
   }
-  tocaSonido(sample, { ganancia: fuerza(volumen), tono: 0.94 + Math.random() * 0.12 })
+  tocaSonido(sample, { ganancia: fuerza(volumen), tono: 0.93 + Math.random() * 0.14 })
+}
+
+let ultimoEscudo = 0
+
+/**
+ * **Un escudo que revienta**: chapa y cristal. Suena más fuerte cuando el escudo es del rival (lo
+ * has roto tú) que cuando es tuyo.
+ */
+export function escudoRoto(delRival: boolean): void {
+  const ahora = performance.now()
+  if (ahora - ultimoEscudo < 90) return
+  ultimoEscudo = ahora
+  const sample = sonido(rutaTropa('escudo'))
+  if (!sample) {
+    burst(0.12, 0.07, 3200, 'highpass')
+    return
+  }
+  tocaSonido(sample, { ganancia: fuerza(delRival ? 0.3 : 0.16), tono: 0.9 + Math.random() * 0.25 })
 }
 
 /** La bala rebota en algo duro (el escudo de la carreta, por ejemplo). */
