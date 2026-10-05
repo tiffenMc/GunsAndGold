@@ -1,3 +1,4 @@
+import { infoDeSello } from '../battle/sellos'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, Quaternion, Vector3 } from 'three'
@@ -72,6 +73,9 @@ const RESTING: Pose = {
     head: [-6, 20, 0],
   },
 }
+
+/** Lo grande que sale el muñeco en primer plano (respecto a cuando cabe entero). */
+const PRIMER_PLANO = 1.7
 
 function dollSpec(card: Extract<CardDef, { kind: 'batalla' }>): { spec: BodySpec; scale: number } {
   const pr = proportions(card.look)
@@ -152,6 +156,11 @@ export interface TrappedCardProps {
   still?: boolean
   /** El muñeco de dentro con pocas mallas (la mano de la batalla lleva varias cartas a la vez). */
   lite?: boolean
+  /**
+   * **Primer plano**: el muñeco grande, de cintura para arriba y quieto, como una foto de su
+   * cartel (la mano de la partida: así se reconoce cada carta de un vistazo).
+   */
+  primerPlano?: boolean
 }
 
 /**
@@ -159,7 +168,7 @@ export interface TrappedCardProps {
  * gravedad segun como este girada en el mundo y los empujones segun como se mueva, asi que
  * al inclinarla, voltearla o sacudirla, lo de dentro se cae y rueda de verdad.
  */
-export function TrappedCard({ card, glow = 0, dimmed = false, kick = 0, still = false, lite = false }: TrappedCardProps) {
+export function TrappedCard({ card, glow = 0, dimmed = false, kick = 0, still = false, lite = false, primerPlano = false }: TrappedCardProps) {
   const root = useRef<Group>(null)
   const body = useRef<Group>(null)
   const glareMesh = useRef<Mesh>(null)
@@ -178,7 +187,9 @@ export function TrappedCard({ card, glow = 0, dimmed = false, kick = 0, still = 
   }, [rarezaColor, fuegos.tinte])
   const info = useMemo(() => frameInfo(card), [card])
   const frame = useMemo(() => makeFrameTexture(info), [info])
-  const backdrop = useMemo(() => makeBackdropTexture(card.accent), [card.accent])
+  // El fondo de dentro brilla del color de su sello (las armas, del suyo).
+  const fondo = card.kind === 'batalla' ? infoDeSello(card).color : card.accent
+  const backdrop = useMemo(() => makeBackdropTexture(fondo), [fondo])
   const glare = useMemo(() => {
     const tex = glareTexture().clone()
     tex.needsUpdate = true
@@ -253,10 +264,16 @@ export function TrappedCard({ card, glow = 0, dimmed = false, kick = 0, still = 
     const push = Math.hypot(inertial.x, inertial.y)
 
     const s = state.current
-    if (!still) stepTrap(s, spec, BOX, gx, gy, grip * grip, push, dt)
+    if (!still && !primerPlano) stepTrap(s, spec, BOX, gx, gy, grip * grip, push, dt)
 
     const b = body.current
-    if (card.kind === 'arma') {
+    if (primerPlano && card.kind === 'batalla') {
+      // De pie y quieto, con los pies por debajo de la ventana: se ve de cintura para arriba.
+      if (b) {
+        b.position.set(winCx, WINDOW.y0 - DOLL_H * PRIMER_PLANO * 0.24, 0)
+        b.rotation.set(0, 0, 0)
+      }
+    } else if (card.kind === 'arma') {
       // El arma no rueda por el suelo: flota en el centro de la vitrina, grande, girando despacio
       // (se ve de lado y de frente) y con un balanceo suave. Nada de verla tumbada y pequeña.
       if (b) {
@@ -343,7 +360,7 @@ export function TrappedCard({ card, glow = 0, dimmed = false, kick = 0, still = 
             look={card.look}
             motion={IDLE}
             playing={!still}
-            scale={doll.scale}
+            scale={doll.scale * (primerPlano ? PRIMER_PLANO : 1)}
             mixRef={mix}
             lite={lite}
           />

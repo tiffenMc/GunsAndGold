@@ -62,7 +62,6 @@ import { usePlayer } from '../game/players'
 import type { ResumenDeBatalla } from '../game/incursiones'
 import { SmokeClouds, TunnelPortals, ZapField } from './Specials'
 import { HabilidadesLayer } from './EfectosHabilidad'
-import { ChapaDeLaMano } from './Carteles'
 import { personalidadDe } from './personalidad'
 import { PantallaClima, SucesosClimaFx } from './SucesosClimaFx'
 import type { AccionRemota, Sala } from '../red/sala'
@@ -374,11 +373,6 @@ const Balas = memo(WeaponBullets)
 const Habilidades = memo(HabilidadesLayer)
 const SucesosDelClima = memo(SucesosClimaFx)
 const Avisos = memo(Punterias)
-
-/** Mientras arrastras una carta, su chapa no se queda colgada en el hueco. */
-function seEstaArrastrando(view: HandView, slot: number): boolean {
-  return view.holding === slot
-}
 
 /** Lleva la lista de muñecos del campo: solo re-pinta cuando entra o sale alguno. */
 const Units = memo(function Units({ battle, paceRef }: { battle: Battle; paceRef: MutableRefObject<Pace> }) {
@@ -2062,14 +2056,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
 
       {fase === 'listo' && <PantallaClima battle={battle} />}
 
-      {/* ---------- El papel de cada carta de la mano: por qué sacarla ---------- */}
-      {fase === 'listo' &&
-        !over &&
-        handView.slots.map((slot, i) => {
-          const rect = layout.slots[i]
-          if (!slot.card || !rect || seEstaArrastrando(handView, i)) return null
-          return <ChapaDeLaMano key={`${i}-${slot.drawKey}`} card={slot.card} left={rect.x} top={rect.y + rect.h - 9} width={rect.w} apagada={slot.dimmed ?? false} />
-        })}
       {callout && !over && (
         <div key={callout.key} className="pointer-events-none absolute inset-x-0 top-[34%] z-[16] flex justify-center px-4 text-center">
           <span

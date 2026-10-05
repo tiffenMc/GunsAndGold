@@ -115,7 +115,7 @@ const HandCard = memo(function HandCard({
   return (
     <group ref={group} position={[initialX, initialY + layout.card.h, 0]} scale={unit}>
       <group ref={spin}>
-        <TrappedCard key={drawKey} card={card} glow={holding ? 1 : 0} dimmed={dimmed} lite />
+        <TrappedCard key={drawKey} card={card} glow={holding ? 1 : 0} dimmed={dimmed} lite primerPlano />
       </group>
     </group>
   )
