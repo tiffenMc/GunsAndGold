@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { BoxGeometry, CircleGeometry, DoubleSide, RingGeometry, Vector2 } from 'three'
-import type { Group, Material, Mesh, Sprite, SpriteMaterial } from 'three'
+import type { Group, Material, Mesh, MeshBasicMaterial, Sprite, SpriteMaterial } from 'three'
 import { motionById, samplePose } from '../animations'
 import type { BurstStyle } from '../animations'
 import { DollBody } from '../DollBody'
@@ -15,7 +15,8 @@ import { SIDE_COLOR } from './Field'
 import { estiloDe, propDe } from './estilos'
 import { rarityInfo, rarityOf } from '../cards/model'
 import { AuraRareza } from './Effects'
-import { UnitBadge, UnitBase } from './UnitBadge'
+import { UnitBadge, UnitBase, medidaDeEscudos } from './UnitBadge'
+import { escudoRoto } from './sfx'
 import { personalidadDe } from './personalidad'
 import type { Personalidad } from './personalidad'
 import { EstadosUnidad, aplicarPose } from './PosesHabilidad'
@@ -109,6 +110,95 @@ function Recarga({ unit, y }: { unit: Unit; y: number }) {
           </mesh>
         ))}
       </group>
+    </Billboard>
+  )
+}
+
+const ESQUIRLA = new BoxGeometry(0.17, 0.17, 0.03)
+const DESTELLO = new CircleGeometry(0.55, 20)
+const ONDA = new RingGeometry(0.36, 0.5, 28)
+const ESQUIRLAS = 9
+const ROTURA_S = 0.6
+
+/**
+ * **El escudo que se rompe**: al perder un escudo, ese circulito revienta en su sitio, con un
+ * destello blanco, una onda y esquirlas del color del bando que saltan y caen, y suena a chapa
+ * rota. Así se ve (y se oye) cada escudo que le quitas.
+ */
+function RoturaDeEscudo({ unit, y, color }: { unit: Unit; y: number; color: string }) {
+  const grupo = useRef<Group>(null)
+  const destello = useRef<Mesh>(null)
+  const onda = useRef<Mesh>(null)
+  const trozos = useRef<(Mesh | null)[]>([])
+  const estado = useRef({ antes: Math.ceil(unit.shields), edad: ROTURA_S, x: 0, fuerza: 1, vel: [] as { x: number; y: number; giro: number }[] })
+  useFrame((_, dt) => {
+    const g = grupo.current
+    if (!g) return
+    const e = estado.current
+    const ahora = Math.max(0, Math.ceil(unit.shields))
+    if (ahora < e.antes) {
+      const { total, pip } = medidaDeEscudos(e.antes, Math.max(unit.maxShields, unit.baseShields))
+      // El que se rompe es el último lleno: el de más a la derecha.
+      const indice = Math.min(total - 1, ahora)
+      e.x = (indice + 0.5 - total / 2) * pip
+      e.edad = 0
+      e.fuerza = Math.min(2.2, 1 + (e.antes - ahora - 1) * 0.5)
+      e.vel = Array.from({ length: ESQUIRLAS }, (_, i) => {
+        const a = (i / ESQUIRLAS) * Math.PI * 2 + Math.random() * 0.6
+        const v = (2.2 + Math.random() * 2) * e.fuerza
+        return { x: Math.cos(a) * v, y: Math.sin(a) * v + 1.4, giro: (Math.random() - 0.5) * 20 }
+      })
+      escudoRoto(unit.side === 1)
+    }
+    e.antes = ahora
+    if (e.edad >= ROTURA_S) {
+      g.visible = false
+      return
+    }
+    e.edad += dt
+    const k = Math.min(1, e.edad / ROTURA_S)
+    g.visible = true
+    const cy = y + 0.27
+    if (destello.current) {
+      destello.current.position.set(e.x, cy, 0.02)
+      destello.current.scale.setScalar((0.7 + k * 1.4) * e.fuerza)
+      ;(destello.current.material as MeshBasicMaterial).opacity = Math.max(0, 1 - k * 2.2)
+    }
+    if (onda.current) {
+      onda.current.position.set(e.x, cy, 0.01)
+      onda.current.scale.setScalar((0.8 + k * 3) * e.fuerza)
+      ;(onda.current.material as MeshBasicMaterial).opacity = Math.max(0, 0.9 * (1 - k))
+    }
+    trozos.current.forEach((m, i) => {
+      const v = e.vel[i]
+      if (!m || !v) return
+      const s = e.edad
+      m.position.set(e.x + v.x * s, cy + v.y * s - 6 * s * s, 0.03)
+      m.rotation.z = v.giro * s
+      m.scale.setScalar(Math.max(0.01, 1 - k * 0.7) * e.fuerza)
+      ;(m.material as MeshBasicMaterial).opacity = Math.max(0, 1 - k * k)
+    })
+  })
+  return (
+    <Billboard ref={grupo} visible={false}>
+      <mesh ref={onda} geometry={ONDA} renderOrder={24}>
+        <meshBasicMaterial color={color} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={destello} geometry={DESTELLO} renderOrder={25}>
+        <meshBasicMaterial color="#ffffff" transparent depthTest={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {Array.from({ length: ESQUIRLAS }, (_, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            trozos.current[i] = el
+          }}
+          geometry={ESQUIRLA}
+          renderOrder={25}
+        >
+          <meshBasicMaterial color={i % 3 === 0 ? '#ffffff' : color} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
     </Billboard>
   )
 }
@@ -388,6 +478,8 @@ export function FieldUnit({
           y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)}
         />
       )}
+      {/* (Fuera del "si está vivo": el último escudo también revienta al caer.) */}
+      {act !== 'roto' && <RoturaDeEscudo unit={unit} color={color} y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)} />}
 
     </group>
   )
