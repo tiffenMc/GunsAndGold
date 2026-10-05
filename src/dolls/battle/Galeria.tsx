@@ -154,6 +154,7 @@ function makeTestBattle(card: CardDef, torre = false): Battle {
   const enemigo = BUILTIN_BATTLE[0]!
   const battle = createBattle({ decks: [[card], [enemigo]], practice: true })
   battle.cards.set(card.id, card)
+  for (const bando of battle.cartas) bando.set(card.id, card)
   if (card.kind === 'arma') {
     // El arma en la mano y sin gastarse nunca.
     battle.hands[0].weapon.cardId = card.id

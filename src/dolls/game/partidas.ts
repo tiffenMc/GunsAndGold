@@ -99,12 +99,15 @@ export function prepararPartida(player: Player, semilla: number): Preparativos {
   const tuya = (id: string) => player.unlocked.includes(id)
   const deck = puesta ? { ...puesta, battle: puesta.battle.filter(tuya), weapons: puesta.weapons.filter(tuya) } : null
   const mia = deck ? cartasDeLaBaraja(player, deck, cards) : []
+  const extras = extrasDeBatalla(player)
   const azarBot = azarDeSemilla(semilla, SAL_BOT)
   // El bot lleva todas las cartas de tu clase, cada una con su tipo de tirador sorteado.
   const delBot = cards.map((card) => (card.kind === 'batalla' ? conArquetipo(card, arquetipoAlAzar(azarBot)) : card))
   return {
     mazos: [mia.length > 0 ? mia : cards, delBot],
-    extras: extrasDeBatalla(player),
+    // A la partida solo le tocan dos: el alcance del arma (precisión) y la vida del fuerte. El resto
+    // (daño, velocidad, cadencia, escudos) ya va dentro de tus cartas.
+    extras: { alcanceArma: extras.alcance, vida: extras.vida },
     semilla,
     clima: climaAlAzar(azarDeSemilla(semilla, SAL_CLIMA)),
   }
