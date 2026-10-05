@@ -2,7 +2,7 @@ import { infoDeSello } from '../battle/sellos'
 import type { CSSProperties, ReactNode } from 'react'
 import type { Arquetipo } from '../cards/arquetipos'
 import type { CardDef, Rarity } from '../cards/model'
-import { cardStrength, rarityInfo, rarityOf } from '../cards/model'
+import { rarityInfo, rarityOf } from '../cards/model'
 import { usePortrait } from '../card3d/portraits'
 import { CardViewer } from '../card3d/CardViewer'
 import { useCartas3d } from '../ajustes/cartas3d'
@@ -57,9 +57,6 @@ const FRAMES: Record<Rarity, FrameLook> = {
     corners: 'estrellas',
   },
 }
-
-/** La forma de la gema de la fuerza: un escudo. */
-const ESCUDO = 'polygon(50% 0%, 100% 14%, 100% 58%, 50% 100%, 0% 58%, 0% 14%)'
 
 const ESQUINAS = ['left-0 top-0', 'right-0 top-0', 'bottom-0 left-0', 'bottom-0 right-0'] as const
 
@@ -242,7 +239,6 @@ export function GameCard({
     amber: 'bg-amber-500 text-amber-950 border-amber-200/70',
   }
 
-  const strength = cardStrength(card)
   // El color de la gema y de la cinta: el de la rareza (en las normales, bronce y no gris).
   const tinte = rarityId === 'normal' ? '#e0a85c' : rarity.color
   const carriage = (
@@ -277,38 +273,6 @@ export function GameCard({
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-2xl opacity-50">
           {card.kind === 'batalla' ? '🤠' : '🔫'}
-        </span>
-      )}
-
-      {/* Un solo numero arriba: su fuerza (las cifras sueltas se ven en la ficha) */}
-      {owned && (
-        // La gema de la fuerza: un escudo con bisel, del color de su rareza
-        <span
-          className="absolute left-[4%] drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]"
-          title="Fuerza de la carta (1-6)"
-          style={{ top: card.kind === 'batalla' ? '17%' : '3%', width: '23cqw', height: '26cqw' }}
-        >
-          <span className="absolute inset-0 bg-black/85" style={{ clipPath: ESCUDO }} />
-          <span
-            className="absolute flex items-center justify-center font-west leading-none text-white"
-            style={{
-              inset: '1.8cqw',
-              clipPath: ESCUDO,
-              fontSize: '13cqw',
-              paddingBottom: '2cqw',
-              background: `linear-gradient(160deg, #ffffff 0%, ${tinte} 38%, ${tinte} 62%, #1a0d04 120%)`,
-              textShadow: '0 1.5px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000',
-            }}
-          >
-            {strength}
-          </span>
-          {/* (Para que se sepa qué es ese número.) */}
-          <span
-            className="absolute left-1/2 -translate-x-1/2 rounded-[1cqw] bg-black/80 px-[1.2cqw] font-black uppercase leading-none tracking-wide text-amber-100"
-            style={{ bottom: '-5cqw', fontSize: '4.4cqw', paddingTop: '0.6cqw', paddingBottom: '0.6cqw' }}
-          >
-            Fuerza
-          </span>
         </span>
       )}
 
