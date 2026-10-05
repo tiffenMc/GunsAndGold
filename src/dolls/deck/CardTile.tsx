@@ -1,4 +1,6 @@
-import { estiloDe, personalidadAtacante, personalidadTorre } from '../battle/estilos'
+import { estiloDe } from '../battle/estilos'
+import { SELLOS, selloDe } from '../battle/sellos'
+import { SelloGrande } from './Sello'
 import { habilidadDe } from '../battle/habilidades'
 import { TORRE_CADENCIA, TORRE_ESCUDOS, rangoDeTorre } from '../battle/engine'
 import { useEffect, useRef } from 'react'
@@ -186,23 +188,30 @@ export function CardStats({
   if (card.kind === 'batalla') {
     const pattern = patternById(card.pattern)
     const level = patternLevelFor(cardPower(card))
-    const cara = torre ? personalidadTorre(card) : personalidadAtacante(card)
     const estilo = estiloDe(card)
-    const apoyo = Boolean(estilo.pulso || estilo.pacifico || estilo.aura)
+    const sello = SELLOS[selloDe(card)]
+    const apoyo = sello.id === 'apoyo'
     const guardian = estilo.cuerpo !== undefined
-    // Los numeros de cada cara: la torre aguanta mas, llega mas lejos y pega antes.
-    const escudos = torre ? Math.round(card.shields * TORRE_ESCUDOS) : card.shields
-    const alcance = torre ? rangoDeTorre(card) : card.range
-    const cadencia = (card.fireMs / 1000) / (torre ? TORRE_CADENCIA : 1)
+    // Los numeros de verdad de cada cara: con lo que le cambia su sello (y la torre, lo suyo).
+    const ms = sello.mods.soldado
+    const mt = sello.mods.torre
+    const escudosSoldado = Math.max(1, Math.round(card.shields * ms.escudos))
+    const escudos = torre ? Math.max(1, Math.round(escudosSoldado * TORRE_ESCUDOS * mt.escudos)) : escudosSoldado
+    const alcanceSoldado = card.range * ms.alcance
+    const alcance = torre ? rangoDeTorre(card) * mt.alcance : alcanceSoldado
+    const cadenciaSoldado = (card.fireMs * ms.cadencia) / 1000
+    const cadencia = torre ? (cadenciaSoldado * mt.cadencia) / TORRE_CADENCIA : cadenciaSoldado
     const datos: { icono: string; label: string; valor: string; antes?: string }[] = [
-      { icono: '🛡', label: 'Escudos', valor: String(escudos), antes: torre ? String(card.shields) : undefined },
+      { icono: '🛡', label: 'Escudos', valor: String(escudos), antes: torre ? String(escudosSoldado) : undefined },
       {
         icono: '🎯',
         label: torre ? (apoyo ? 'Área de ayuda' : guardian ? 'Golpea hasta' : 'Alcance') : 'Alcance',
         valor: `${alcance.toFixed(1)} m`,
-        antes: torre ? `${card.range.toFixed(1)} m` : undefined,
+        antes: torre ? `${alcanceSoldado.toFixed(1)} m` : undefined,
       },
-      { icono: '⏱', label: 'Ataca cada', valor: `${cadencia.toFixed(1)} s`, antes: torre ? `${(card.fireMs / 1000).toFixed(1)} s` : undefined },
+      ...(sello.mods[torre ? 'torre' : 'soldado'].golpe > 0 && !apoyo
+        ? [{ icono: '⏱', label: 'Ataca cada', valor: `${cadencia.toFixed(1)} s`, antes: torre ? `${cadenciaSoldado.toFixed(1)} s` : undefined }]
+        : [{ icono: '🚫', label: 'Ataque', valor: apoyo ? 'No pega: cura' : 'No pega' }]),
       { icono: torre ? '📍' : '🏃', label: 'Movimiento', valor: torre ? 'Fija' : 'Avanza' },
     ]
     return (
@@ -227,11 +236,8 @@ export function CardStats({
           ))}
         </div>
 
-        {/* Lo que hace, en grande */}
-        <div className={`rounded-xl border-2 p-2.5 ${torre ? 'border-slate-300/60 bg-slate-500/15' : 'border-amber-300/60 bg-amber-500/10'}`}>
-          <p className="font-west text-[20px] leading-none text-amber-50">{cara.titulo}</p>
-          <p className="mt-1 text-[12px] leading-snug text-amber-100/85">{cara.nota}</p>
-        </div>
+        {/* El sello, en grande: lo que manda en la pelea (y la variante de esta carta) */}
+        <SelloGrande card={card} torre={torre} />
 
         {/* Su habilidad: lo que hace al ver a un enemigo (y su versión de torre) */}
         {(() => {

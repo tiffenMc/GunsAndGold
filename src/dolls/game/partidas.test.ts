@@ -1,3 +1,4 @@
+import { modsDe, selloDe } from '../battle/sellos'
 import { DECK_BATTLE, DECK_WEAPONS, rarityOf } from '../cards/model'
 import { conClima } from '../battle/clima'
 import { slotCard } from '../battle/engine'
@@ -89,9 +90,11 @@ describe('tus cartas y tus características en la partida', () => {
     expect(sim.jugar({ a: 'carta', slot: 0, x: 0, z: 10, precision: 1, torre: false })).toBe(true)
     const tropa = b.units.find((u) => u.side === 0)!
     const esperada = conClima(mia, b.clima, mia.arquetipo)
+    // (Con lo que le cambia su sello: la cadencia del asesino, la del área…)
+    const mods = modsDe(selloDe(mia as Parameters<typeof selloDe>[0]), false)
     expect(tropa.card.id).toBe(mia.id)
     expect(tropa.card.damage).toBe(esperada.damage)
-    expect(tropa.card.fireMs).toBe(esperada.fireMs)
+    expect(tropa.card.fireMs).toBe(Math.round(esperada.fireMs * mods.cadencia))
     expect(tropa.card.shields).toBe(esperada.shields)
   })
 

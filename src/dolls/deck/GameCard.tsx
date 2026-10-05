@@ -1,3 +1,4 @@
+import { infoDeSello } from '../battle/sellos'
 import type { CSSProperties, ReactNode } from 'react'
 import type { Arquetipo } from '../cards/arquetipos'
 import type { CardDef, Rarity } from '../cards/model'
@@ -299,6 +300,28 @@ export function GameCard({
           </span>
         </span>
       )}
+
+      {/* El sello de la carta, estampado encima del nombre: lo primero que se ve */}
+      {card.kind === 'batalla' && (() => {
+        const sello = infoDeSello(card)
+        return (
+          <span
+            className="absolute right-[4%] flex items-center justify-center rounded-full border-[1.2cqw] shadow-[0_1cqw_2cqw_rgba(0,0,0,0.7)]"
+            title={`Sello: ${sello.label}`}
+            style={{
+              bottom: '23%',
+              width: '24cqw',
+              height: '24cqw',
+              fontSize: '13cqw',
+              borderColor: sello.color,
+              background: `radial-gradient(circle at 35% 30%, ${sello.color}55, #140a04 70%)`,
+              opacity: owned ? 1 : 0.5,
+            }}
+          >
+            {sello.icono}
+          </span>
+        )
+      })()}
 
       {owned ? (
         corner

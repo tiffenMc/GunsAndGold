@@ -2,6 +2,7 @@ import { CanvasTexture, LinearFilter, SRGBColorSpace } from 'three'
 import type { CardDef, Rarity } from '../cards/model'
 import { LEVEL_LABEL, SHOT_MODES, cardPower, patternLevelFor, rarityInfo, rarityOf, specialOf } from '../cards/model'
 import { patternById } from '../cards/patterns'
+import { infoDeSello } from '../battle/sellos'
 import type { Pt } from '../cards/patterns'
 
 /**
@@ -168,6 +169,8 @@ export interface FrameInfo {
   left: { icon: BadgeIcon; text: string; color: string }
   right: { icon: BadgeIcon; text: string; color: string }
   pattern?: Pt[]
+  /** El sello de la carta de batalla: va estampado en la esquina del retrato. */
+  sello?: { label: string; color: string; icono: string }
 }
 
 export function frameInfo(card: CardDef): FrameInfo {
@@ -175,13 +178,16 @@ export function frameInfo(card: CardDef): FrameInfo {
   const rareza = { rarity, rarityColor: rarityInfo(rarity).color }
   if (card.kind === 'batalla') {
     const level = patternLevelFor(cardPower(card))
+    const sello = infoDeSello(card)
     return {
       ...rareza,
       name: card.name,
-      sub: `Batalla · ${LEVEL_LABEL[level]}`,
+      sub: `${sello.label} · ${LEVEL_LABEL[level]}`,
       accent: card.accent,
-      left: { icon: 'golpe', text: String(card.damage), color: '#fca5a5' },
-      right: { icon: 'escudo', text: String(card.shields), color: '#7dd3fc' },
+      sello: { label: sello.label, color: sello.color, icono: sello.icono },
+      // (Los números de verdad en la partida: con lo que les cambia su sello.)
+      left: { icon: 'golpe', text: String(Math.round(card.damage * sello.mods.soldado.fuerte)), color: '#fca5a5' },
+      right: { icon: 'escudo', text: String(Math.max(1, Math.round(card.shields * sello.mods.soldado.escudos))), color: '#7dd3fc' },
       pattern: patternById(card.pattern).points,
     }
   }
@@ -374,9 +380,37 @@ function paintFrame(ctx: CanvasRenderingContext2D, info: FrameInfo) {
   ctx.strokeText(title, w / 2, plateY + plateH * 0.42)
   ctx.fillStyle = '#fff3d6'
   ctx.fillText(title, w / 2, plateY + plateH * 0.42)
-  ctx.font = `600 22px "Cinzel", Georgia, serif`
-  ctx.fillStyle = info.accent
+  ctx.font = `${info.sello ? 700 : 600} 22px "Cinzel", Georgia, serif`
+  ctx.fillStyle = info.sello?.color ?? info.accent
   ctx.fillText(info.sub.toUpperCase(), w / 2, plateY + plateH * 0.8)
+
+  // El sello, estampado en la esquina del retrato: lo primero que se ve de la carta.
+  if (info.sello) {
+    const r = 46
+    const cx = wx0 + 26
+    const cy = wy1 - 22
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'
+    ctx.shadowBlur = 10
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.fillStyle = '#140a04'
+    ctx.fill()
+    ctx.restore()
+    ctx.beginPath()
+    ctx.arc(cx, cy, r - 5, 0, Math.PI * 2)
+    ctx.lineWidth = 7
+    ctx.strokeStyle = info.sello.color
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(cx, cy, r - 13, 0, Math.PI * 2)
+    ctx.fillStyle = tono(info.sello.color, -0.55)
+    ctx.fill()
+    ctx.font = `44px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(info.sello.icono, cx, cy + 2)
+  }
 }
 
 function makeTexture(canvas: HTMLCanvasElement): CanvasTexture {

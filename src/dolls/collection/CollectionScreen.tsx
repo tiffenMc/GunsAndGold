@@ -4,6 +4,9 @@ import type { Rarity } from '../cards/model'
 import { RARITIES, STRENGTH_LEGEND, rarityOf } from '../cards/model'
 import { useGameCards } from '../cards/store'
 import { CardSheet } from '../deck/CardSheet'
+import { SelloChapa } from '../deck/Sello'
+import { SELLOS, SELLOS_EN_ORDEN, selloDe } from '../battle/sellos'
+import type { Sello } from '../battle/sellos'
 import { GameCard } from '../deck/GameCard'
 import { Avatar } from '../game/Avatar'
 import { arquetipoDe, levelOf, nivelDeCarta, usePlayer } from '../game/players'
@@ -17,9 +20,13 @@ export function CollectionScreen() {
   const player = usePlayer()
   const cards = useGameCards()
   const [filter, setFilter] = useState<Rarity | 'todas'>('todas')
+  /** Y por sello: ver todos los tanques, todos los asesinos… */
+  const [sello, setSello] = useState<Sello | 'todos'>('todos')
   const [open, setOpen] = useState<string | null>(null)
   const mine = cards.filter((card) => player.unlocked.includes(card.id))
-  const shown = filter === 'todas' ? cards : cards.filter((card) => rarityOf(card) === filter)
+  const shown = (filter === 'todas' ? cards : cards.filter((card) => rarityOf(card) === filter)).filter(
+    (card) => sello === 'todos' || (card.kind === 'batalla' && selloDe(card) === sello),
+  )
   const current = open ? cards.find((card) => card.id === open) : undefined
   const owned = Boolean(current && player.unlocked.includes(current.id))
 
@@ -58,10 +65,23 @@ export function CollectionScreen() {
           ))}
         </div>
 
+        {/* Y por sello */}
+        <div className="flex gap-1 overflow-x-auto px-3 pb-1">
+          <button type="button" onClick={() => setSello('todos')} className={`shrink-0 rounded-full border-2 px-2 py-0.5 text-[11px] font-black uppercase ${sello === 'todos' ? 'border-amber-200 bg-amber-200 text-amber-950' : 'border-amber-200/40 text-amber-100/70'}`}>
+            Todos
+          </button>
+          {SELLOS_EN_ORDEN.map((s) => (
+            <button key={s} type="button" onClick={() => setSello(sello === s ? 'todos' : s)} className={`shrink-0 rounded-full ${sello === s ? 'ring-2 ring-amber-200' : ''}`} title={SELLOS[s].nota}>
+              <SelloChapa sello={s} tam="mini" apagada={sello !== 'todos' && sello !== s} />
+            </button>
+          ))}
+        </div>
+        {sello !== 'todos' && <p className="px-3 text-[12px] leading-snug text-amber-100/75">{SELLOS[sello].nota} · Fuerte: {SELLOS[sello].fuerte.toLowerCase()} · Débil: {SELLOS[sello].debil.toLowerCase()}</p>}
+
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-2">
           {shown.length === 0 ? (
             <p className="rounded-xl border border-dashed border-amber-900/60 p-4 text-center text-[14px] text-amber-200/60">
-              No hay cartas de esa rareza.
+              No hay cartas así.
             </p>
           ) : (
             <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">

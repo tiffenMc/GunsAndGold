@@ -3,6 +3,8 @@ import { BUILTIN_WEAPONS } from '../cards/catalog'
 import { DRAW_S, HAND_SIZE, SPECIAL_SECONDS, WEAPON_SWAP_S, qualityOf, scaledStats, usesOf } from '../cards/model'
 import type { BattleCard, CardDef, QualityId, ShotMode, WeaponCard } from '../cards/model'
 import { ajusteDeDisparos, conClima } from './clima'
+import { danoEntre, efectoDeTorre, estiloConSello, modsDe, selloDelEstilo, torreSinDano } from './sellos'
+import type { Atacante, Sello } from './sellos'
 import type { Clima } from './clima'
 import { congelada, pasoClima } from './sucesosClima'
 import type { Suceso, SucesoGordo } from './sucesosClima'
@@ -242,8 +244,10 @@ export interface Unit {
   /** Lo que le falta para acabar de recargar (0 = no esta recargando). */
   reloadLeft: number
   spawn: Vec
-  /** Como pelea esta carta (rafagas, area, rebote, cuerpo a cuerpo, cura…). */
+  /** Como pelea esta carta (rafagas, area, rebote, cuerpo a cuerpo, cura…), con su sello encima. */
   estilo: Estilo
+  /** Su sello (tanque, asesino, distancia…): lo que manda en la pelea (ver `sellos.ts`). */
+  sello: Sello
   /** Balas que caben en su tambor y lo que tarda en recargarlas. */
   maxAmmo: number
   recargaS: number
@@ -299,7 +303,7 @@ export function rangoDeTorre(card: BattleCard): number {
 /** Hasta donde llega el ataque de una tropa (las torres, hasta su rango de defensa). */
 export function alcanceDe(unit: Unit): number {
   if (!unit.torre) return unit.card.range
-  return rangoDeTorre(unit.card)
+  return rangoDeTorre(unit.card) * modsDe(unit.sello, true).alcance
 }
 
 /** Doble toque sobre una torre: vuelve a ser soldado y avanza. Solo una vez. */
@@ -319,6 +323,8 @@ export function soltarTorre(battle: Battle, unitId: number): boolean {
 export interface Campo {
   id: number
   side: Side
+  /** El sello de quien lo dejó. */
+  sello: Sello
   x: number
   z: number
   radio: number
@@ -369,6 +375,8 @@ export interface TroopShot {
   melee: boolean
   /** Lo dispara un indio: deja marcado al rival (la presa marcada recibe mas de todos los indios). */
   marca: boolean
+  /** El sello de quien dispara (el golpe se mide con los sellos). */
+  sello: Sello
   /** Golpe de un guardian: frena al que lo recibe. */
   frena: boolean
   /** Lo ha soltado una torre (se marca el golpe para que se vea defender). */
@@ -771,9 +779,19 @@ export function spawnUnit(
   frozen = false,
 ): Unit {
   // El clima de la partida recorta lo suyo (el tipo de tirador ya viene puesto en la carta).
-  const enSuClima = conClima(card, battle.clima, card.arquetipo)
-  const estilo = estiloDe(card)
-  const stats = scaledStats(enSuClima, { ...qualityOfId(quality) })
+  const conElClima = conClima(card, battle.clima, card.arquetipo)
+  // El sello manda: cambia escudos, velocidad, cadencia, alcance y daño, y pone sus reglas al estilo.
+  const sello = selloDelEstilo(estiloDe(card))
+  const estilo = estiloConSello(estiloDe(card), sello)
+  const mods = modsDe(sello, false)
+  const enSuClima: BattleCard = {
+    ...conElClima,
+    speed: conElClima.speed * mods.velocidad,
+    fireMs: Math.round(conElClima.fireMs * mods.cadencia),
+    range: Math.round(conElClima.range * mods.alcance * 10) / 10,
+  }
+  const base = scaledStats(enSuClima, { ...qualityOfId(quality) })
+  const stats = { ...base, shields: Math.max(1, Math.round(base.shields * mods.escudos)), damage: Math.round(base.damage * mods.fuerte) }
   const enemy = fortPos(other(side))
   const unit: Unit = {
     id: battle.nextId++,
@@ -807,9 +825,10 @@ export function spawnUnit(
     reloadLeft: 0,
     spawn: { ...at },
     estilo,
+    sello,
     maxAmmo: estilo.balas ?? BALAS,
     // Los vaqueros recargan un cuarto antes: la polvora es lo suyo.
-    recargaS: (estilo.recargaS ?? RECARGA_S) * (card.clase === undefined || card.clase === 'vaqueros' ? 0.75 : 1),
+    recargaS: (estilo.recargaS ?? RECARGA_S) * (card.clase === undefined || card.clase === 'vaqueros' ? 0.75 : 1) * mods.recarga,
     rafaga: null,
     lastShotAt: -99,
     slowUntil: 0,
@@ -894,7 +913,7 @@ export function playCard(
 export function hacerTorre(battle: Battle, unit: Unit) {
   unit.torre = true
   unit.torreHasta = battle.time + TORRE_S
-  unit.maxShields = Math.round(unit.baseShields * TORRE_ESCUDOS)
+  unit.maxShields = Math.max(1, Math.round(unit.baseShields * TORRE_ESCUDOS * modsDe(unit.sello, true).escudos))
   unit.shields = unit.maxShields
   battle.events.push({ type: 'torre', unitId: unit.id, x: unit.x, z: unit.z, side: unit.side, torre: true })
 }
@@ -1183,8 +1202,16 @@ export function alive(unit: Unit): boolean {
   return unit.state !== 'muerto'
 }
 
-export function hurtUnit(battle: Battle, unit: Unit, amount: number, weapon: boolean, source?: Vec) {
+/**
+ * Quita escudos a un soldado. `source` es de donde viene el golpe; si trae su sello (un soldado, o
+ * el origen de su tiro), el golpe se mide con los sellos: el tanque casi no recibe salvo de
+ * asesinos y área, la distancia pega el doble al área… (ver `danoEntre`). Sin sello: el arma del
+ * jugador si `weapon`, y si no, nadie en concreto (el clima).
+ */
+export function hurtUnit(battle: Battle, unit: Unit, amount: number, weapon: boolean, source?: Vec & { sello?: Sello }) {
   if (!alive(unit)) return
+  const atacante: Atacante = source?.sello ?? (weapon ? 'arma' : null)
+  amount *= danoEntre(atacante, unit.sello)
   // La cupula se come el golpe (y el que duerme se despierta).
   if (!antesDeHerir(battle, unit)) return
   // Con el cartel de "se busca" colgado, recibe el doble.
@@ -1230,7 +1257,7 @@ export function hurtUnit(battle: Battle, unit: Unit, amount: number, weapon: boo
       for (const foe of battle.units) {
         if (foe.side === unit.side || !alive(foe)) continue
         if (M.hypot(foe.x - unit.x, foe.z - unit.z) <= radio + UNIT_R * 0.5) {
-          hurtUnit(battle, foe, 2, true, { x: unit.x, z: unit.z })
+          hurtUnit(battle, foe, 2, true, { x: unit.x, z: unit.z, sello: unit.sello })
         }
       }
     }
@@ -1270,6 +1297,15 @@ function hurtFort(battle: Battle, side: Side, damage: number) {
 function findDuel(battle: Battle, unit: Unit): Unit | null {
   // Los medicos y los de apoyo no se pelean con soldados.
   if (unit.estilo.pacifico) return null
+  // Las torres de tanque y de control no pegan (frenan, aturden… ver `pasoTorreSinDano`).
+  if (unit.torre && torreSinDano(unit.sello)) return null
+  // El de distancia marca a uno y no lo suelta mientras siga a tiro.
+  if (unit.sello === 'distancia' && unit.duelWith !== null) {
+    const marcado = battle.units.find((u) => u.id === unit.duelWith)
+    if (marcado && alive(marcado) && !hiddenBySmoke(battle, marcado) && M.hypot(marcado.x - unit.x, marcado.z - unit.z) <= alcanceDe(unit) + UNIT_R) {
+      return marcado
+    }
+  }
   let best: Unit | null = null
   let bestScore = Infinity
   for (const foe of battle.units) {
@@ -1283,10 +1319,13 @@ function findDuel(battle: Battle, unit: Unit): Unit | null {
     if (objetivo === 'lejos') score = -d
     else if (objetivo === 'fuerte') score = -foe.shields * 10 + d * 0.1
     else if (objetivo === 'debil') score = foe.shields * 10 + d * 0.1
+    // El asesino va primero a por los tanques.
+    else if (objetivo === 'tanque') score = foe.sello === 'tanque' ? d - 2000 : d
     else if (unit.card.arquetipo === 'selecto') score = foe.shields * 10 + d * 0.1
     else if (unit.card.arquetipo === 'profesional') score = d - foe.damage * 0.03
-    // Los cebos atraen todos los disparos de los que los tienen a tiro.
-    if (foe.estilo.provoca && d <= foe.estilo.provoca) score -= 1000
+    // Los cebos (y los tanques: les hacen focus) atraen los disparos de los que los tienen a tiro.
+    // El de distancia no se deja: elige él su blanco.
+    if (foe.estilo.provoca && d <= foe.estilo.provoca && unit.sello !== 'distancia') score -= 1000
     // El guardian (torre de cuerpo a cuerpo) se lleva la atencion de los que pasan a su lado.
     if (foe.torre && foe.estilo.cuerpo !== undefined && d <= GUARDIAN_ATRAE) score -= 900
     if (score < bestScore) {
@@ -1317,7 +1356,9 @@ function auraDe(battle: Battle, unit: Unit): { vel: number; cad: number } {
 function golpeDe(unit: Unit): number {
   const base = unit.estilo.golpe ?? 1
   const furia = unit.estilo.furia ?? 0
-  return base + furia * (1 - unit.shields / Math.max(1, unit.maxShields))
+  const golpe = base + furia * (1 - unit.shields / Math.max(1, unit.maxShields))
+  // El sello: el asesino quita muchísimo, el tanque y el control poco…
+  return golpe * modsDe(unit.sello, unit.torre).golpe
 }
 
 /** Si un bando esta aturdido por el rayo, sus tropas ni andan ni disparan. */
@@ -1370,6 +1411,13 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
   }
   if (unit.state === 'aturdido') unit.state = 'andar'
 
+  // Las torres de tanque y de control no pegan (ni con habilidad): frenan, y aturden, congelan o
+  // empujan a los que entran. Al acabarse su tiempo, se sueltan como cualquier torre.
+  if (unit.torre && torreSinDano(unit.sello)) {
+    if (battle.time >= unit.torreHasta) soltarTorre(battle, unit.id)
+    else pasoTorreSinDano(battle, unit)
+    return
+  }
   // La habilidad en curso manda: mientras dura, ni anda ni dispara normal.
   if (unit.hab.activa && pasoHabilidad(battle, unit, dt)) return
 
@@ -1430,7 +1478,8 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
       let mejor = unit.estilo.cuerpo
       for (const foe of battle.units) {
         if (foe.side === unit.side || !alive(foe) || hiddenBySmoke(battle, foe)) continue
-        const d = M.hypot(foe.x - unit.x, foe.z - unit.z)
+        // El asesino persigue antes a un tanque (como si estuviera más cerca).
+        const d = M.hypot(foe.x - unit.x, foe.z - unit.z) - (unit.sello === 'asesino' && foe.sello === 'tanque' ? 5 : 0)
         if (d < mejor) {
           mejor = d
           cercano = foe
@@ -1488,7 +1537,8 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
 
   // Kamikaze: al tener un rival al alcance, se lanza a explotar.
   // (De torre no: la torre lanza su fardo de dinamita.)
-  if (unit.estilo.suicida && duel && !unit.torre) {
+  // (Espera a tener lista su mecha: si llega antes de nada, explota sin su habilidad.)
+  if (unit.estilo.suicida && duel && !unit.torre && battle.time >= unit.bornAt + 0.65) {
     unit.sacrificado = true
     hurtUnit(battle, unit, unit.shields + 1, false)
     return
@@ -1532,7 +1582,7 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
         unit.ammo -= 1
         const aura = auraDe(battle, unit)
         // La espera cuenta desde que acaba la rafaga (mientras dispara no corre).
-        unit.cooldown = unit.card.fireMs / 1000 / (rachaMult(battle, unit.side) * (1 + aura.cad) * (unit.torre ? TORRE_CADENCIA : 1))
+        unit.cooldown = unit.card.fireMs / 1000 / (rachaMult(battle, unit.side) * (1 + aura.cad) * (unit.torre ? TORRE_CADENCIA / modsDe(unit.sello, true).cadencia : 1))
         unit.shotCount += 1
         unit.fireIn = WINDUP
       }
@@ -1541,10 +1591,75 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
 }
 
 /** El pulso de un medico (cura a los suyos) o de un predicador (frena a los rivales): solo si hay a quien afectar. */
+/** Cada cuánto suelta su golpe fuerte la torre de un tanque o de un control. */
+const PULSO_TORRE_S: Record<ReturnType<typeof efectoDeTorre>, number> = { ralentiza: 3, aturde: 4, congela: 6, empuja: 3.5 }
+
+/**
+ * **La torre que no pega** (tanques y controles): todo rival dentro de su zona va frenado, y cada
+ * poco suelta su golpe fuerte: frenar del todo, aturdir, congelar o empujar hacia fuera.
+ */
+function pasoTorreSinDano(battle: Battle, unit: Unit) {
+  unit.state = 'fuego'
+  unit.duelWith = null
+  unit.fireIn = null
+  unit.rafaga = null
+  const radio = alcanceDe(unit)
+  const efecto = efectoDeTorre(unit.estilo)
+  const toca = battle.time >= unit.pulsoAt
+  let afecta = 0
+  for (const foe of battle.units) {
+    if (foe.side === unit.side || !alive(foe) || hiddenBySmoke(battle, foe)) continue
+    if (M.hypot(foe.x - unit.x, foe.z - unit.z) > radio + UNIT_R) continue
+    foe.slowUntil = Math.max(foe.slowUntil, battle.time + 0.3)
+    afecta++
+    if (!toca) continue
+    if (efecto === 'ralentiza') foe.slowUntil = Math.max(foe.slowUntil, battle.time + 3)
+    else if (efecto === 'aturde') foe.hitStun = Math.max(foe.hitStun, 0.9)
+    else if (efecto === 'congela') {
+      foe.hitStun = Math.max(foe.hitStun, 1.6)
+      foe.slowUntil = Math.max(foe.slowUntil, battle.time + 3)
+    } else {
+      const dx = foe.x - unit.x
+      const dz = foe.z - unit.z
+      const l = M.hypot(dx, dz) || 1
+      foe.knockback.x += (dx / l) * 5
+      foe.knockback.z += (dz / l) * 5
+      foe.hitStun = Math.max(foe.hitStun, 0.3)
+    }
+  }
+  if (toca && afecta > 0) {
+    unit.pulsoAt = battle.time + PULSO_TORRE_S[efecto]
+    unit.shotCount += 1
+    battle.events.push({ type: 'pulso', side: unit.side, x: unit.x, z: unit.z, r: radio, tipo: 'grito' })
+  }
+}
+
 function soltarPulso(battle: Battle, unit: Unit) {
   const pulso = unit.estilo.pulso
   if (!pulso) return
   let afecta = 0
+  // La cura a uno solo: al que más escudos le falten de los que tiene cerca (torres incluidas).
+  if (pulso.individual && pulso.cura) {
+    let herido: Unit | null = null
+    let falta = 0
+    for (const otro of battle.units) {
+      if (otro.side !== unit.side || !alive(otro) || otro === unit) continue
+      if (M.hypot(otro.x - unit.x, otro.z - unit.z) > pulso.radio * (unit.torre ? 1.5 : 1)) continue
+      const tope = pulso.sobreEscudo ? otro.maxShields + 2 : otro.maxShields
+      if (tope - otro.shields > falta) {
+        falta = tope - otro.shields
+        herido = otro
+      }
+    }
+    if (!herido) {
+      unit.pulsoAt = battle.time + 1
+      return
+    }
+    herido.shields = Math.min(pulso.sobreEscudo ? herido.maxShields + 2 : herido.maxShields, herido.shields + pulso.cura)
+    unit.pulsoAt = battle.time + pulso.cadaS
+    battle.events.push({ type: 'pulso', side: unit.side, x: herido.x, z: herido.z, r: 1.4, tipo: 'cura' })
+    return
+  }
   for (const otro of battle.units) {
     if (!alive(otro) || otro === unit) continue
     if (M.hypot(otro.x - unit.x, otro.z - unit.z) > pulso.radio * (unit.torre ? 1.5 : 1)) continue
@@ -1610,6 +1725,7 @@ function launchTroopShot(battle: Battle, unit: Unit) {
     // El guardian golpea a distancia con su onda: no lleva bala, pero se pinta la onda en el blanco.
     melee: unit.estilo.cuerpo !== undefined,
     marca: unit.card.clase === 'indios',
+    sello: unit.sello,
     frena: unit.torre && unit.estilo.cuerpo !== undefined,
     deTorre: unit.torre,
   }
@@ -1771,7 +1887,7 @@ function stepShot(battle: Battle, shot: TroopShot, dt: number): boolean {
 /** Lo que hace un tiro al llegar a un soldado: el golpe, y lo que traiga su estilo (area, rebote, perforante, campo, empujon…). */
 function impactarTiro(battle: Battle, shot: TroopShot, unit: Unit) {
   const estilo = shot.estilo
-  const origen = { x: shot.from.x, z: shot.from.z }
+  const origen = { x: shot.from.x, z: shot.from.z, sello: shot.sello }
   // En el duelo no hay daño de fortaleza: cada tiro quita sus escudos (1 por defecto).
   // La presa marcada por un indio recibe un cuarto mas de todos los indios.
   const marcada = battle.time < unit.marcaHasta
@@ -1802,7 +1918,7 @@ function impactarTiro(battle: Battle, shot: TroopShot, unit: Unit) {
     for (const foe of battle.units) {
       if (foe === unit || foe.side === shot.side || !alive(foe)) continue
       if (M.hypot(foe.x - unit.x, foe.z - unit.z) <= estilo.area + UNIT_R * 0.5) {
-        hurtUnit(battle, foe, Math.max(0.5, shot.golpe * 0.6), true, { x: unit.x, z: unit.z })
+        hurtUnit(battle, foe, Math.max(0.5, shot.golpe * 0.6), true, { x: unit.x, z: unit.z, sello: shot.sello })
       }
     }
   }
@@ -1856,6 +1972,7 @@ function impactarTiro(battle: Battle, shot: TroopShot, unit: Unit) {
     battle.campos.push({
       id: battle.nextId++,
       side: shot.side,
+      sello: shot.sello,
       x: unit.x,
       z: unit.z,
       radio: campo.radio,
@@ -1880,7 +1997,7 @@ function stepCampos(battle: Battle) {
       if (foe.side === campo.side || !alive(foe)) continue
       if (M.hypot(foe.x - campo.x, foe.z - campo.z) > campo.radio) continue
       if (campo.ralentiza) foe.slowUntil = Math.max(foe.slowUntil, battle.time + campo.ralentiza)
-      if (campo.golpe > 0) hurtUnit(battle, foe, campo.golpe, false)
+      if (campo.golpe > 0) hurtUnit(battle, foe, campo.golpe, false, { x: campo.x, z: campo.z, sello: campo.sello })
     }
   }
 }

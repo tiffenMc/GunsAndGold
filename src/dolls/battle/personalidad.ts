@@ -1,6 +1,7 @@
 import type { Estilo } from './estilos'
 import type { SonidoDeTropa } from './sfx'
 import { papelDelEstilo } from './papeles'
+import { selloDelEstilo } from './sellos'
 import type { Papel } from './papeles'
 
 /**
@@ -117,6 +118,11 @@ export function personalidadDe(estilo: Estilo): Personalidad {
     p.embestida = Math.max(p.embestida, 0.7)
     p.inclina = Math.max(p.inclina, 0.15)
   }
+  // El aviso antes de pegar va con el sello: el de distancia apunta a su blanco con la línea, el de
+  // área marca la zona donde va a caer. Los demás no avisan.
+  const sello = selloDelEstilo(estilo)
+  p.apunta = sello === 'distancia' ? 'linea' : sello === 'area' && !estilo.campo && !estilo.rebota && !estilo.reapunta ? 'zona' : undefined
+  if (sello === 'distancia' && p.sonido === 'revolver') p.sonido = 'rifle'
   hechas.set(estilo.id, p)
   return p
 }

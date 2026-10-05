@@ -17,7 +17,8 @@ import {
   weaponCard,
 } from './engine'
 import type { Battle, Side, Unit } from './engine'
-import { estiloDe } from './estilos'
+import { selloDe } from './sellos'
+import type { Sello } from './sellos'
 
 /**
  * El rival de la maquina. Es flojo a proposito: tarda en reaccionar, dibuja regular y
@@ -56,19 +57,51 @@ export function stepBot(battle: Battle, bot: Bot): void {
       .map((slot, index) => (slot.cardId && puedeSacar(battle, bot.side, index).ok ? index : -1))
       .filter((index) => index >= 0)
     if (posibles.length > 0) {
-      const slot = posibles[Math.floor(rand() * posibles.length)]!
-      // Sale en su mitad: lejos de su casa (hacia el frente) o cerca, a ratos.
+      // **Juega con los sellos**: monta un equipo (tanque delante, curas y tiradores detrás) y
+      // contesta a lo que ve (a sus tanques, asesinos o área; a sus asesinos, control).
+      const sellos = posibles.map((i) => {
+        const c = slotCard(battle, bot.side, i)
+        return c ? selloDe(c) : 'asalto'
+      })
+      const mios = battle.units.filter((u) => u.side === bot.side && u.state !== 'muerto')
+      const suyos = battle.units.filter((u) => u.side !== bot.side && u.state !== 'muerto')
+      const hay = (lista: Unit[], s: Sello) => lista.some((u) => u.sello === s)
+      const peso = (s: Sello): number => {
+        let p = 1
+        if (s === 'tanque' && !hay(mios, 'tanque')) p += 3
+        if (s === 'apoyo') p += hay(mios, 'tanque') ? 2 : -0.6
+        if ((s === 'asesino' || s === 'area') && hay(suyos, 'tanque')) p += 3
+        if (s === 'control' && hay(suyos, 'asesino')) p += 3
+        if (s === 'distancia' && hay(suyos, 'area')) p += 3
+        if (s === 'area' && suyos.length >= 3) p += 2
+        return Math.max(0.2, p)
+      }
+      const pesos = sellos.map(peso)
+      let tirada = rand() * pesos.reduce((a, b) => a + b, 0)
+      let elegido = 0
+      for (let i = 0; i < pesos.length; i++) {
+        tirada -= pesos[i]!
+        if (tirada <= 0) {
+          elegido = i
+          break
+        }
+      }
+      const slot = posibles[elegido]!
+      const sello = sellos[elegido]!
+      // Sale en su mitad: el tanque y el asesino delante; los frágiles (distancia, área, apoyo), detrás.
       const lado = bot.side === 1 ? -1 : 1
-      const x = (rand() - 0.5) * 9
-      const z = lado * (4 + rand() * 14)
+      const delante = sello === 'tanque' || sello === 'asesino'
+      const detras = sello === 'distancia' || sello === 'apoyo' || sello === 'area'
+      // Los de detrás van por el carril de su tanque (si tiene), para que los cubra.
+      const tanque = mios.find((u) => u.sello === 'tanque')
+      const x = detras && tanque ? tanque.x + (rand() - 0.5) * 2 : (rand() - 0.5) * 9
+      const z = lado * (delante ? 3 + rand() * 5 : detras ? 10 + rand() * 7 : 4 + rand() * 14)
       // Casi siempre "medio" o "bien"; alguna vez perfecto.
       const accuracy = 0.4 + rand() * 0.45
-      // Algunas cartas las pone de torre, cerca de casa: las de apoyo y las duras, a menudo.
-      const carta = slotCard(battle, bot.side, slot)
-      const est = carta ? estiloDe(carta) : null
-      const defensiva = Boolean(est && (est.pacifico || est.pulso || est.blindaje || est.provoca || est.area))
-      const torresYa = battle.units.filter((u) => u.side === bot.side && u.torre && u.state !== 'muerto').length
-      const torre = torresYa < 2 && rand() < (defensiva ? 0.35 : 0.06)
+      // De torre, cerca de casa: los tanques, los controles, los de distancia y los de apoyo, a menudo.
+      const defensiva = sello === 'tanque' || sello === 'control' || sello === 'distancia' || sello === 'apoyo'
+      const torresYa = mios.filter((u) => u.torre).length
+      const torre = torresYa < 2 && rand() < (defensiva ? 0.3 : 0.05)
       const zTorre = (bot.side === 1 ? -1 : 1) * (12 + rand() * 6)
       playCard(battle, bot.side, slot, x, torre ? zTorre : z, accuracy, torre)
     }

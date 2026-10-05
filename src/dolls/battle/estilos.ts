@@ -33,7 +33,7 @@ export interface Estilo {
   /** No ataca a los soldados: solo ayuda (y le tira un poco al fuerte). */
   pacifico?: boolean
   /** Cada cierto tiempo, un pulso en area: cura a los suyos y/o frena a los rivales. */
-  pulso?: { radio: number; cadaS: number; cura?: number; sobreEscudo?: boolean; ralentiza?: number; aturde?: number }
+  pulso?: { radio: number; cadaS: number; cura?: number; sobreEscudo?: boolean; ralentiza?: number; aturde?: number; individual?: boolean }
   /** Los aliados cercanos van mas rapido y/o disparan antes. */
   aura?: { radio: number; vel?: number; cadencia?: number }
   /** Los rivales que lo tienen a menos de este radio le disparan a el. */
@@ -58,7 +58,7 @@ export interface Estilo {
   /** Cada tiro quita entre medio y tres escudos, segun la suerte. */
   azar?: boolean
   /** A quien le dispara de entre los que alcanza (por defecto, al mas cercano). */
-  objetivo?: 'debil' | 'fuerte' | 'lejos'
+  objetivo?: 'debil' | 'fuerte' | 'lejos' | 'tanque'
 }
 
 const lista: Estilo[] = [
@@ -355,30 +355,4 @@ const PROP_DE: Record<string, 'medico' | 'bandera' | 'barril' | 'dinamita' | 'mu
 
 export function propDe(estilo: Pick<Estilo, 'id'>) {
   return PROP_DE[estilo.id.replace(/^[vi]:/, '')]
-}
-
-/** Las dos caras de cada carta: lo que hace saliendo de soldado y lo que hace plantada de torre. */
-export interface Personalidad {
-  titulo: string
-  /** Lo que hace, en una frase corta. */
-  nota: string
-  /** Los cambios, en puntos cortos (para la ficha). */
-  puntos: string[]
-}
-
-export function personalidadAtacante(card: Pick<BattleCard, 'estilo'>): Personalidad {
-  const estilo = estiloDe(card)
-  return { titulo: estilo.label, nota: estilo.nota, puntos: ['Avanza hacia el fuerte rival'] }
-}
-
-/** Lo que hace la carta de **torre**: se planta, aguanta mas y defiende a su manera. */
-export function personalidadTorre(card: Pick<BattleCard, 'estilo'>): Personalidad {
-  const estilo = estiloDe(card)
-  if (estilo.pulso || estilo.pacifico || estilo.aura) {
-    return { titulo: 'Puesto de apoyo', nota: 'Ayuda a los suyos desde su sitio', puntos: ['No se mueve', '+60 % escudos', 'Su ayuda llega ×1,5 más lejos'] }
-  }
-  if (estilo.cuerpo !== undefined) {
-    return { titulo: 'Guardián', nota: 'Para en seco a los que pasan', puntos: ['No se mueve', '+60 % escudos', 'Atrae y frena a quien pasa cerca'] }
-  }
-  return { titulo: 'Torre de tiro', nota: 'Dispara desde lejos sin moverse', puntos: ['No se mueve', '+60 % escudos', '+30 % alcance · dispara antes'] }
 }
