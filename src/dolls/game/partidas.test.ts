@@ -1,3 +1,4 @@
+import { DECK_BATTLE, DECK_WEAPONS, rarityOf } from '../cards/model'
 import { conClima } from '../battle/clima'
 import { slotCard } from '../battle/engine'
 import { Simulacion } from '../battle/simulacion'
@@ -101,5 +102,27 @@ describe('tus cartas y tus características en la partida', () => {
     expect(fino.alcanceArma).toBeCloseTo(1.2, 5)
     expect(fino.alcanceArma).toBeGreaterThan(normal.alcanceArma)
     expect(fino.forts[0].maxHp).toBeGreaterThan(normal.forts[0].maxHp)
+  })
+})
+
+describe('la baraja del bot, justa', () => {
+  it('lleva 10 muñecos y 4 armas sin repetir, con las mismas rarezas que la tuya', () => {
+    const p = personaje()
+    for (const semilla of [1, 2, 3, 99]) {
+      const prep = prepararPartida(p, semilla)
+      const [mia, bot] = prep.mazos
+      expect(bot.filter((c) => c.kind === 'batalla')).toHaveLength(DECK_BATTLE)
+      expect(bot.filter((c) => c.kind === 'arma')).toHaveLength(DECK_WEAPONS)
+      expect(new Set(bot.map((c) => c.id)).size).toBe(bot.length)
+      const rarezas = (lista: typeof bot) => lista.map((c) => `${c.kind}:${rarityOf(c)}`).sort()
+      expect(rarezas(bot)).toEqual(rarezas(mia))
+    }
+  })
+
+  it('cada partida le toca otra baraja, pero con la misma semilla siempre la misma', () => {
+    const p = personaje()
+    const ids = (s: number) => prepararPartida(p, s).mazos[1].map((c) => c.id).join(',')
+    expect(ids(5)).toBe(ids(5))
+    expect(new Set([1, 2, 3, 4, 5, 6].map(ids)).size).toBeGreaterThan(1)
   })
 })

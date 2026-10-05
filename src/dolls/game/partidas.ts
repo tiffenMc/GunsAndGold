@@ -1,6 +1,7 @@
 import { arquetipoAlAzar, conArquetipo } from '../cards/arquetipos'
 import type { Arquetipo } from '../cards/arquetipos'
 import { BUILTIN_CARDS } from '../cards/catalog'
+import { DECK_BATTLE, DECK_WEAPONS, RARITY_ORDER, rarityOf } from '../cards/model'
 import type { CardDef } from '../cards/model'
 import { normalize } from '../cards/store'
 import { climaAlAzar } from '../battle/clima'
@@ -91,6 +92,43 @@ export function problemaDelEncargo(player: Player, encargo: Encargo, ahora = Dat
   return null
 }
 
+/**
+ * **La baraja del bot, justa**: 10 muñecos y 4 armas de tu clase, con **las mismas rarezas que la
+ * tuya** (por cada normal tuya, una normal suya; por cada épica, una épica…). Qué cartas en concreto
+ * se sortea con la semilla, sin repetir, y cada muñeco con su tipo de tirador. Si de una rareza no
+ * quedan, se coge la más parecida.
+ */
+export function barajaDelBot(cards: readonly CardDef[], tuya: readonly CardDef[], azar: () => number): CardDef[] {
+  const usadas = new Set<string>()
+  const elegir = (kind: CardDef['kind'], rareza: (typeof RARITY_ORDER)[number]): CardDef | null => {
+    const libres = cards.filter((c) => c.kind === kind && !usadas.has(c.id))
+    const puesto = RARITY_ORDER.indexOf(rareza)
+    for (const salto of [0, -1, 1, -2, 2, -3, 3]) {
+      const r = RARITY_ORDER[puesto + salto]
+      if (!r) continue
+      const de = libres.filter((c) => rarityOf(c) === r)
+      if (de.length > 0) return de[Math.floor(azar() * de.length)]!
+    }
+    return libres[Math.floor(azar() * libres.length)] ?? null
+  }
+  // Lo que se copia de tu baraja: sus 10 muñecos y sus 4 armas (si te faltan, normales).
+  const plantilla = (kind: CardDef['kind'], cuantas: number) => {
+    const de = tuya.filter((c) => c.kind === kind).map((c) => rarityOf(c))
+    while (de.length < cuantas) de.push(RARITY_ORDER[0]!)
+    return de.slice(0, cuantas)
+  }
+  const salida: CardDef[] = []
+  for (const [kind, cuantas] of [['batalla', DECK_BATTLE], ['arma', DECK_WEAPONS]] as const) {
+    for (const rareza of plantilla(kind, cuantas)) {
+      const card = elegir(kind, rareza)
+      if (!card) continue
+      usadas.add(card.id)
+      salida.push(card.kind === 'batalla' ? conArquetipo(card, arquetipoAlAzar(azar)) : card)
+    }
+  }
+  return salida
+}
+
 /** Monta la partida de un encargo con su semilla: tu baraja, la del bot, tus extras y el clima. */
 export function prepararPartida(player: Player, semilla: number): Preparativos {
   const cards = cartasDe(player)
@@ -100,11 +138,9 @@ export function prepararPartida(player: Player, semilla: number): Preparativos {
   const deck = puesta ? { ...puesta, battle: puesta.battle.filter(tuya), weapons: puesta.weapons.filter(tuya) } : null
   const mia = deck ? cartasDeLaBaraja(player, deck, cards) : []
   const extras = extrasDeBatalla(player)
-  const azarBot = azarDeSemilla(semilla, SAL_BOT)
-  // El bot lleva todas las cartas de tu clase, cada una con su tipo de tirador sorteado.
-  const delBot = cards.map((card) => (card.kind === 'batalla' ? conArquetipo(card, arquetipoAlAzar(azarBot)) : card))
+  const tuyas = mia.length > 0 ? mia : cards
   return {
-    mazos: [mia.length > 0 ? mia : cards, delBot],
+    mazos: [tuyas, barajaDelBot(cards, tuyas, azarDeSemilla(semilla, SAL_BOT))],
     // A la partida solo le tocan dos: el alcance del arma (precisión) y la vida del fuerte. El resto
     // (daño, velocidad, cadencia, escudos) ya va dentro de tus cartas.
     extras: { alcanceArma: extras.alcance, vida: extras.vida },
