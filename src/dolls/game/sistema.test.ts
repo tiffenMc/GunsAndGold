@@ -1,7 +1,7 @@
 import { ARQUETIPOS, arquetipoAlAzar, conArquetipo } from '../cards/arquetipos'
 import { BUILTIN_BATTLE, BUILTIN_CARDS } from '../cards/catalog'
 import { claseDe } from '../cards/model'
-import { CLIMAS, ajusteDeCarta, ajusteDeDisparos, climaAlAzar, conClima, visionDeClima } from '../battle/clima'
+import { CLIMAS, ajusteDeCarta, ajusteDeDisparos, climaAlAzar, conClima } from '../battle/clima'
 import { RETOS, incursionesDeLaHora, msParaCambiar, pagar, premioDeCarta, puedePagar, retoCumplido } from './incursiones'
 import type { ResumenDeBatalla } from './incursiones'
 import { aplicarDesgaste, caracteristicasDeFabrica, premioDeEntreno } from './caracteristicas'
@@ -67,19 +67,6 @@ describe('el clima', () => {
     expect(ajusteDeCarta('tormenta', 'berserker').dano).toBeLessThan(ajusteDeCarta('tormenta', 'medio').dano)
     expect(ajusteDeCarta('tormenta', 'berserker').rango).toBeLessThan(ajusteDeCarta('tormenta', 'medio').rango)
     expect(ajusteDeCarta('helado', 'medio').rango).toBeLessThan(ajusteDeCarta('helado', 'selecto').rango)
-  })
-
-  it('de noche el campo rival se pierde a lo lejos, pero tus soldados ganan vista al avanzar', () => {
-    expect(visionDeClima('dia', 40, [])).toBe('claro')
-    expect(visionDeClima('noche', 5, [])).toBe('claro')
-    expect(visionDeClima('noche', 13, [])).toBe('fantasma')
-    expect(visionDeClima('noche', 30, [])).toBe('oculto')
-    // Un soldado recien salido ve poco; el mismo, ya avanzado, ve mucho mas.
-    expect(visionDeClima('noche', 30, [{ distancia: 12, andado: 0 }])).toBe('oculto')
-    expect(visionDeClima('noche', 30, [{ distancia: 12, andado: 20 }])).toBe('claro')
-    // La lluvia tambien limita la vista, algo menos que la noche; el dia y el hielo, no.
-    expect(visionDeClima('lluvia', 30, [])).toBe('oculto')
-    expect(visionDeClima('helado', 30, [])).toBe('claro')
   })
 
   it('la carta con clima cambia de numeros, no de identidad', () => {

@@ -1,7 +1,8 @@
+import { Billboard } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
-import { Vector2 } from 'three'
+import { BoxGeometry, CircleGeometry, DoubleSide, RingGeometry, Vector2 } from 'three'
 import type { Group, Material, Mesh, Sprite, SpriteMaterial } from 'three'
 import { motionById, samplePose } from '../animations'
 import type { BurstStyle } from '../animations'
@@ -15,7 +16,6 @@ import { estiloDe, propDe } from './estilos'
 import { rarityInfo, rarityOf } from '../cards/model'
 import { AuraRareza } from './Effects'
 import { UnitBadge, UnitBase } from './UnitBadge'
-import { papelDe } from './papeles'
 import { personalidadDe } from './personalidad'
 import type { Personalidad } from './personalidad'
 import { EstadosUnidad, aplicarPose } from './PosesHabilidad'
@@ -58,6 +58,61 @@ function fantasmaDe(material: Material): Material {
   return copia
 }
 
+/**
+ * Su animación de ataque: la del vaquero va con su manera de pelear (el francotirador, rodilla en
+ * tierra; la ráfaga, sin bajar el brazo; el de escopeta, a la cadera; el de cuerpo a cuerpo, a
+ * golpes…). Los vikingos y los indios ya traen la suya (hachazos, flechas).
+ */
+function ataqueDe(card: Unit['card'], unit: Unit): string {
+  if (card.clase && card.clase !== 'vaqueros') return card.anims.disparar
+  return personalidadDe(unit.estilo).ataque
+}
+
+const ARO_RECARGA = new RingGeometry(0.46, 0.64, 32)
+const FONDO_RECARGA = new CircleGeometry(0.72, 32)
+const BALITA = new BoxGeometry(0.1, 0.22, 0.1)
+
+/**
+ * **Recargando**: un aro amarillo encima de la cabeza que se va llenando (y unas balas que giran
+ * dentro). Así se ve que está metiendo balas, no que se ha quedado congelado.
+ */
+function Recarga({ unit, y }: { unit: Unit; y: number }) {
+  const grupo = useRef<Group>(null)
+  const aro = useRef<Mesh>(null)
+  const balas = useRef<Group>(null)
+  // Cada uno el suyo (se pinta a trozos según su recarga).
+  const geometria = useMemo(() => ARO_RECARGA.clone(), [])
+  useEffect(() => () => geometria.dispose(), [geometria])
+  useFrame((_, dt) => {
+    const g = grupo.current
+    if (!g) return
+    const recarga = unit.reloadLeft > 0 && unit.state !== 'muerto'
+    g.visible = recarga
+    if (!recarga) return
+    const k = 1 - unit.reloadLeft / Math.max(0.1, unit.recargaS)
+    // Cada trozo del aro son 6 índices: se pinta hasta donde va la recarga.
+    aro.current?.geometry.setDrawRange(0, Math.max(6, Math.floor(32 * k) * 6))
+    if (balas.current) balas.current.rotation.z -= dt * 5
+  })
+  return (
+    <Billboard ref={grupo} position={[0, y, 0]} visible={false}>
+      <mesh geometry={FONDO_RECARGA} renderOrder={22}>
+        <meshBasicMaterial color="#120a04" transparent opacity={0.8} depthTest={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={aro} geometry={geometria} rotation={[0, 0, Math.PI / 2]} scale={[-1, 1, 1]} renderOrder={23}>
+        <meshBasicMaterial color="#fbbf24" transparent depthTest={false} depthWrite={false} toneMapped={false} side={DoubleSide} />
+      </mesh>
+      <group ref={balas}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} geometry={BALITA} position={[Math.cos((i * Math.PI * 2) / 3) * 0.2, Math.sin((i * Math.PI * 2) / 3) * 0.2, 0]} renderOrder={23}>
+            <meshBasicMaterial color="#fde68a" transparent depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+    </Billboard>
+  )
+}
+
 interface Manera {
   fase: number
   /** Segundos desde su último ataque. */
@@ -95,6 +150,12 @@ function moverseASuManera(g: Group, m: Manera, per: Personalidad, unit: Unit, ac
   g.position.x = temblor ? (Math.random() - 0.5) * 2 * temblor * metro : 0
   g.rotation.z = (anda ? 1 : 0.3) * per.balanceo * paso
   g.rotation.x = per.inclina * (anda ? 1 : 0.4)
+  // Recargando: mira el arma (cabeza gacha) y la menea, metiendo balas.
+  if (unit.reloadLeft > 0) {
+    g.rotation.x = 0.32
+    g.rotation.z = Math.sin(m.fase * 3) * 0.06
+    g.position.y += Math.abs(Math.sin(m.fase * 3)) * 0.04 * metro
+  }
   if (per.giro && anda) m.giro += dt * per.giro
   if (per.giroAlAtacar && m.ataque < ATAQUE_S * 1.3) m.giro += dt * 17
   else if (!anda) m.giro -= wrapAngle(m.giro) * Math.min(1, dt * 7)
@@ -241,7 +302,7 @@ export function FieldUnit({
 
   const motion =
     act === 'disparar'
-      ? motionById(card.anims.disparar)
+      ? motionById(ataqueDe(card, unit))
       : act === 'impacto' || act === 'caer'
         ? motionById(card.anims.impacto)
         : act === 'morir'
@@ -272,7 +333,6 @@ export function FieldUnit({
   }
 
   const height = useMemo(() => proportions(card.look).H, [card.look])
-  const papel = papelDe(card)
 
   return (
     <group ref={group} position={[unit.x, 0, unit.z]} rotation={[0, unit.heading, 0]}>
@@ -318,13 +378,13 @@ export function FieldUnit({
         <BarraTorre unit={unit} battle={battle} y={height * UNIT_SCALE * tam + 0.93 + 0.95} color={color} />
       )}
       {act !== 'roto' && act !== 'morir' && <EstadosUnidad unit={unit} battle={battle} alto={height * UNIT_SCALE * tam + (torre ? 0.93 : 0)} color={color} />}
+      {act !== 'roto' && act !== 'morir' && <Recarga unit={unit} y={height * UNIT_SCALE * tam + 1.7 + (torre ? 0.93 : 0)} />}
       {act !== 'roto' && act !== 'morir' && (
         // La barra de escudos del bando: una sola imagen por soldado.
         <UnitBadge
           escudos={shields}
           maximo={Math.max(unit.maxShields, unit.baseShields)}
           color={color}
-          papel={papel}
           y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)}
         />
       )}
