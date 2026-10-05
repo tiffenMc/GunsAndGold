@@ -1467,13 +1467,18 @@ function stepUnit(battle: Battle, unit: Unit, dt: number, pace: Pace) {
         targetRadius = 0.9
       }
     }
+    // Hacia el fuerte, cada uno **por su carril**: avanza recto y se va arrimando al centro poco a
+    // poco. (Si todos fueran derechos al centro del fuerte, acabarían en fila, uno encima de otro.)
+    const alFuerte = target === enemyFort
+    if (alFuerte) target = { x: unit.x * 0.92 + enemyFort.x * 0.08, z: enemyFort.z }
     const dx = target.x - unit.x
     const dz = target.z - unit.z
     const distance = M.hypot(dx, dz) || 1
     // Mientras anda va cargando el tambor.
     unit.ammo = Math.min(unit.maxAmmo, unit.ammo + (dt * unit.maxAmmo) / unit.recargaS)
     unit.reloadLeft = 0
-    const move = Math.min(speed * dt, Math.max(0, distance - targetRadius))
+    const falta = alFuerte ? fortDist - SIEGE_RANGE : distance - targetRadius
+    const move = Math.min(speed * dt, Math.max(0, falta))
     unit.x += (dx / distance) * move
     unit.z += (dz / distance) * move
     unit.heading = M.atan2(dx, dz)
@@ -1640,26 +1645,42 @@ function launchTroopShot(battle: Battle, unit: Unit) {
   battle.shots.push(shot)
 }
 
+/** Lo que ocupa cada soldado en el suelo (los grandes, más): así no se pisan unos a otros. */
+function sitioDe(unit: Unit): number {
+  return UNIT_R * 1.3 * (unit.estilo.tam ?? 1)
+}
+
+/**
+ * Nadie se pone encima de nadie: los del mismo bando se apartan (sobre todo de lado, para no
+ * frenarse) y con los rivales también se guarda la distancia (cuerpo a cuerpo se pegan, pero no
+ * se meten uno dentro del otro). Las torres no se mueven: se aparta el otro.
+ */
 function separate(battle: Battle) {
   const list = battle.units.filter((unit) => alive(unit) && !unit.frozen)
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i]!
       const b = list[j]!
-      if (a.side !== b.side) continue
+      const mismo = a.side === b.side
       const dx = b.x - a.x
       const dz = b.z - a.z
       const d = M.hypot(dx, dz)
-      const min = UNIT_R * 1.9
+      const min = (sitioDe(a) + sitioDe(b)) * (mismo ? 1 : 0.8)
       if (d >= min) continue
-      const push = (min - d) * 0.5
-      // Se apartan de lado para no taparse, sin frenarse.
-      const nx = d > 0.001 ? dx / d : 1
+      const ma = a.torre ? 0 : 1
+      const mb = b.torre ? 0 : 1
+      if (ma + mb === 0) continue
+      const push = min - d
+      const nx = d > 0.001 ? dx / d : a.id < b.id ? 1 : -1
       const nz = d > 0.001 ? dz / d : 0
-      a.x -= nx * push
-      a.z -= nz * push * 0.3
-      b.x += nx * push
-      b.z += nz * push * 0.3
+      // Los del mismo bando se apartan de lado (sin frenarse); los rivales, del todo.
+      const kz = mismo ? 0.3 : 1
+      const ka = (push * ma) / (ma + mb)
+      const kb = (push * mb) / (ma + mb)
+      a.x -= nx * ka
+      a.z -= nz * ka * kz
+      b.x += nx * kb
+      b.z += nz * kb * kz
     }
   }
   for (const unit of list) {

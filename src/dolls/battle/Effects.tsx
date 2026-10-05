@@ -1,11 +1,12 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type { MutableRefObject } from 'react'
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide, RingGeometry } from 'three'
+import { AdditiveBlending, BufferAttribute, BufferGeometry, CircleGeometry, Color, DoubleSide, RingGeometry } from 'three'
 import type { Group, Mesh, MeshBasicMaterial } from 'three'
-import { FORT_R, fortPos } from './engine'
+import { FORT_R, SIEGE_RANGE, alive, fortPos, smokeVisibility } from './engine'
 import type { Battle, Side, TroopShot, Vec } from './engine'
 import { papelDelEstilo } from './papeles'
+import { personalidadDe } from './personalidad'
 import type { Papel } from './papeles'
 
 const POOL = 48
@@ -533,7 +534,7 @@ const FX_LIFE: Record<FxKind, number> = {
   shell: 0.9,
   warp: 0.45,
   rotura: 1.6,
-  invocacion: 2.2,
+  invocacion: 1.1,
 }
 
 /** Altura de siempre para los efectos que no la traen puesta. */
@@ -657,23 +658,23 @@ function FxItem({ fx }: { fx: Fx }) {
       const sube = 1 - (1 - k) ** 2
       if (pilar) {
         pilar.scale.set(fx.r * (0.9 + k * 0.4), sale, fx.r * (0.9 + k * 0.4))
-        ;(pilar.material as MeshBasicMaterial).opacity = 0.8 * (1 - k) ** 1.4
+        ;(pilar.material as MeshBasicMaterial).opacity = 0.5 * (1 - k) ** 1.6
       }
       if (nucleo) {
         nucleo.scale.set(fx.r * (0.9 - k * 0.5), sale, fx.r * (0.9 - k * 0.5))
         ;(nucleo.material as MeshBasicMaterial).opacity = 0.95 * (1 - k) ** 2
       }
       if (ondaA) {
-        ondaA.scale.setScalar(fx.r * (0.4 + (1 - (1 - k) ** 3) * 4.2))
+        ondaA.scale.setScalar(fx.r * (0.4 + (1 - (1 - k) ** 3) * 2))
         ;(ondaA.material as MeshBasicMaterial).opacity = 0.9 * (1 - k)
       }
       if (ondaB) {
         const kk = Math.max(0, (k - 0.2) / 0.8)
-        ondaB.scale.setScalar(fx.r * (0.4 + (1 - (1 - kk) ** 3) * 6))
+        ondaB.scale.setScalar(fx.r * (0.4 + (1 - (1 - kk) ** 3) * 2.8))
         ;(ondaB.material as MeshBasicMaterial).opacity = kk > 0 ? 0.7 * (1 - kk) : 0
       }
       if (disco) {
-        disco.scale.setScalar(fx.r * (2.2 + k * 1.2))
+        disco.scale.setScalar(fx.r * (1.2 + k * 0.6))
         ;(disco.material as MeshBasicMaterial).opacity = 0.55 * (1 - k) ** 1.5
       }
       chispas.forEach((child, i) => {
@@ -974,6 +975,118 @@ export function RangoTorre({ data }: { data: MutableRefObject<RangoData> }) {
           )
         })}
       </group>
+    </group>
+  )
+}
+
+const PUNTERIAS = 12
+
+/**
+ * **Los que avisan antes de pegar**: el francotirador (y los perforantes) apuntan con una línea
+ * del color de su bando que se va encendiendo hasta el tiro; el cañón y los de área marcan en el
+ * suelo dónde va a caer, y la marca se va llenando. Así se ve qué hace cada uno (y da tiempo a
+ * reaccionar), sin ningún cartel.
+ */
+export function Punterias({ battle }: { battle: Battle }) {
+  const lineas = useRef<(Mesh | null)[]>([])
+  const zonas = useRef<(Group | null)[]>([])
+  const aro = useMemo(() => new RingGeometry(0.86, 1, 40), [])
+  const disco = useMemo(() => new CircleGeometry(1, 32), [])
+  useEffect(
+    () => () => {
+      aro.dispose()
+      disco.dispose()
+    },
+    [aro, disco],
+  )
+  useFrame(() => {
+    let nl = 0
+    let nz = 0
+    for (const unit of battle.units) {
+      if (nl >= PUNTERIAS && nz >= PUNTERIAS) break
+      if (unit.state !== 'fuego' || unit.reloadLeft > 0) continue
+      const per = personalidadDe(unit.estilo)
+      if (!per.apunta) continue
+      if (smokeVisibility(battle, unit, 0) === 'oculto') continue
+      const duel = unit.duelWith !== null ? battle.units.find((u) => u.id === unit.duelWith && alive(u)) : undefined
+      const to = duel ? { x: duel.x, z: duel.z } : fortPos(unit.side === 0 ? 1 : 0)
+      // Al fuerte solo se apunta cuando de verdad le llega (una torre esperando no apunta a nada).
+      if (!duel && Math.hypot(to.x - unit.x, to.z - unit.z) > SIEGE_RANGE + 0.5) continue
+      const espera = Math.max(0.3, unit.card.fireMs / 1000)
+      const k = unit.fireIn !== null || unit.rafaga ? 1 : Math.max(0, Math.min(1, 1 - unit.cooldown / espera))
+      if (k < 0.25) continue
+      const color = ESTELA[unit.side]
+      const brillo = 0.1 + 0.6 * k * k
+      if (per.apunta === 'linea' && nl < PUNTERIAS) {
+        const m = lineas.current[nl++]
+        if (!m) continue
+        const dx = to.x - unit.x
+        const dz = to.z - unit.z
+        const largo = Math.hypot(dx, dz)
+        m.visible = true
+        m.position.set((unit.x + to.x) / 2, 1.35, (unit.z + to.z) / 2)
+        m.rotation.set(0, Math.atan2(dx, dz), 0)
+        const grueso = 0.035 + 0.06 * k
+        m.scale.set(grueso, grueso, largo)
+        const material = m.material as MeshBasicMaterial
+        material.color.set(k > 0.92 ? '#ffffff' : color)
+        material.opacity = brillo
+      } else if (per.apunta === 'zona' && nz < PUNTERIAS) {
+        const z = zonas.current[nz++]
+        if (!z) continue
+        z.visible = true
+        z.position.set(to.x, 0.07, to.z)
+        const r = Math.max(1.3, unit.estilo.area ?? 1.6)
+        z.scale.setScalar(r)
+        const [anillo, lleno] = z.children as Mesh[]
+        if (anillo) {
+          const material = anillo.material as MeshBasicMaterial
+          material.color.set(color)
+          material.opacity = 0.25 + 0.6 * k
+        }
+        if (lleno) {
+          // El disco crece hasta llenar la marca: cuando la llena, cae.
+          lleno.scale.setScalar(Math.max(0.01, k))
+          const material = lleno.material as MeshBasicMaterial
+          material.color.set(color)
+          material.opacity = 0.12 + 0.3 * k
+        }
+      }
+    }
+    for (let i = nl; i < PUNTERIAS; i++) if (lineas.current[i]) lineas.current[i]!.visible = false
+    for (let i = nz; i < PUNTERIAS; i++) if (zonas.current[i]) zonas.current[i]!.visible = false
+  })
+  return (
+    <group>
+      {Array.from({ length: PUNTERIAS }, (_, i) => (
+        <mesh
+          key={`l${i}`}
+          ref={(el) => {
+            lineas.current[i] = el
+          }}
+          visible={false}
+          renderOrder={7}
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color="#ffffff" transparent depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+      {Array.from({ length: PUNTERIAS }, (_, i) => (
+        <group
+          key={`z${i}`}
+          ref={(el) => {
+            zonas.current[i] = el
+          }}
+          visible={false}
+        >
+          <mesh geometry={aro} rotation={[-Math.PI / 2, 0, 0]} renderOrder={6}>
+            <meshBasicMaterial color="#ffffff" transparent depthWrite={false} toneMapped={false} side={DoubleSide} />
+          </mesh>
+          <mesh geometry={disco} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} renderOrder={6}>
+            <meshBasicMaterial color="#ffffff" transparent depthWrite={false} toneMapped={false} side={DoubleSide} />
+          </mesh>
+        </group>
+      ))}
     </group>
   )
 }

@@ -55,8 +55,8 @@ export const PASOS_DEL_TOUR: PasoDelTour[] = [
   {
     foco: 'atajo-tablon',
     titulo: 'Los atajos de abajo',
-    texto: <p>¿Con prisa? Los botones de abajo te llevan <b>al instante</b> a cada sitio.</p>,
-    mision: { texto: <>Toca <b>TABLÓN</b> abajo</>, hecha: (d) => d.zona === 'tablon', premio: '¡Ziuuum!' },
+    texto: <p>¿Con prisa? Abajo están <b>todos los sitios</b> (los del pueblo y los del desierto). Toca uno y dale a <b>¡Ir!</b></p>,
+    mision: { texto: <>Toca <b>TABLÓN</b> abajo y dale a <b>¡Ir!</b></>, hecha: (d) => d.zona === 'tablon', premio: '¡Ziuuum!' },
   },
   {
     pantalla: 'tablon',
@@ -218,7 +218,9 @@ export function TourDeMenus({
     if (!paso.foco) return
     let traido = false
     const medir = () => {
-      const el = document.querySelector<HTMLElement>(`[data-tuto="${paso.foco}"]`)
+      // Si al tocar un atajo ya ha salido la ventana de "¿Vas a ir a…?", se ilumina su botón de Ir.
+      const ir = paso.foco?.startsWith('atajo-') ? document.querySelector<HTMLElement>('[data-tuto="atajo-ir"]') : null
+      const el = ir ?? document.querySelector<HTMLElement>(`[data-tuto="${paso.foco}"]`)
       const base = capa.current?.getBoundingClientRect()
       if (!el || !base) return
       if (!traido) {
