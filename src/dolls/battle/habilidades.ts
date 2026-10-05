@@ -115,7 +115,7 @@ const POR_ESTILO: Record<string, Habilidad> = {
   duelista: H('duelo', '¡A DUELO!', '#f8fafc', 10, 'Duelo al sol: los dos quietos un segundo… gana él, quita dos escudos y medio y aturde', 'Duelo desde la torre, aún más rápido'),
   dinamitero: H('mortero', '¡DINAMITA!', '#dc2626', 11, 'Tres cartuchos de dinamita por el aire alrededor del enemigo', 'Cinco cartuchos desde la torre'),
   canon: H('meteoro', '¡CAÑONAZO!', '#f97316', 13, 'Marca el suelo con una diana… y cae una bala de cañón enorme que aturde', 'La diana es más grande desde la torre', 'canon'),
-  santo: H('rayo', '¡IRA DIVINA!', '#fde047', 11, 'Un rayo dorado que salta de enemigo en enemigo (hasta cinco) y los deja tiesos', 'El rayo salta hasta siete veces'),
+  santo: H('botica', '¡MILAGRO!', '#fde047', 11, 'Lanza agua bendita a los suyos más heridos que tenga cerca', 'Desde la torre llega mucho más lejos'),
   cuerpo: H('salto', '¡AL SUELO!', '#f59e0b', 9, 'Salta por los aires y cae encima del enemigo: onda que empuja a todos', 'Pisotón desde la torre: onda alrededor'),
   matón: H('salto', '¡PISOTÓN!', '#b45309', 10, 'Un salto enorme y un pisotón que lanza por los aires a los de alrededor', 'Pisotón gigante desde la torre', 'pisoton'),
   furia: H('torbellino', '¡REMOLINO!', '#ef4444', 12, 'Gira con el hacha sin rumbo por el campo golpeando a todo el que pilla… y se marea', 'Gira en su atalaya con el hacha larga: da a todo lo que pase'),
@@ -192,7 +192,7 @@ const TORRES: Record<string, Habilidad> = {
   emboscada: T('bandada', '¡ESPANTAPÁJAROS!', '#1f2937', 11, 8, 'Los cuervos del espantapájaros pican y ciegan a todos los de su rango'),
   cuervo: T('tormenta', '¡TORMENTA!', '#c7d2fe', 12, 8, 'Durante 4 segundos caen rayos sobre los enemigos de su rango'),
   canon: T('mortero', '¡ARTILLERÍA!', '#dc2626', 12, 10, 'Bombardea con cinco cargas al enemigo más lejano de su rango'),
-  santo: T('santuario', '¡SANTUARIO!', '#fde047', 12, 7, 'Columnas de luz: cura a los tuyos y castiga a los enemigos de su rango'),
+  santo: T('cura', '¡SANTUARIO!', '#fde047', 12, 7, 'Bendice el suelo: los tuyos (y las torres) de su rango se curan durante unos segundos', 'grande'),
   minigun: T('abanico', '¡BARRERA DE FUEGO!', '#ef4444', 12, 7, 'Una barrera de balas en abanico ancho delante de la torre', 'barrera'),
 }
 
@@ -527,7 +527,8 @@ export function intentarHabilidad(battle: Battle, unit: Unit, enemigo: Unit | nu
   }
   // Las de apoyo se sueltan con un enemigo cerca (o, las de cura, con un compañero herido).
   if (!objetivo && !unit.torre) {
-    const apoyo = hab.mecanica === 'cura' || hab.mecanica === 'burbuja' || hab.mecanica === 'estandarte'
+    // (Los de apoyo no se pelean: sueltan la suya con un enemigo cerca, sea cual sea.)
+    const apoyo = unit.estilo.pacifico || hab.mecanica === 'cura' || hab.mecanica === 'burbuja' || hab.mecanica === 'estandarte'
     if (!apoyo) return false
     objetivo = cercano(battle, unit.side, unit, unit.card.range + 3)
     const herido = hab.mecanica === 'cura' && amigosEn(battle, unit.side, unit, 5).some((a) => a.shields < a.maxShields - 0.4)

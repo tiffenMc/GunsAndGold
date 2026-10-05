@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { DECK_BATTLE, DECK_WEAPONS, MAX_DECKS } from '../cards/model'
 import type { CardDef } from '../cards/model'
+import { SELLOS, SELLOS_EN_ORDEN, selloDe } from '../battle/sellos'
+import { SelloChapa } from './Sello'
 import { useGameCards } from '../cards/store'
 import { CardSheet } from './CardSheet'
 import { GameCard } from './GameCard'
@@ -226,6 +228,8 @@ export function DeckScreen() {
           <p className="mb-1.5 text-[14px] font-bold uppercase tracking-wider text-amber-200/70">
             Muñecos de batalla · {deck.battle.length}/{DECK_BATTLE}
           </p>
+          {/* Tu equipo por sellos: cuántos tanques, asesinos, curas… (así se piensa la estrategia) */}
+          <ResumenDeSellos cartas={deck.battle.map(find).filter((c): c is CardDef => Boolean(c))} />
           <div className="grid grid-cols-3 gap-2.5 md:grid-cols-4">
             {Array.from({ length: DECK_BATTLE }).map((_, index) => hueco('batalla', index))}
           </div>
@@ -349,6 +353,31 @@ export function DeckScreen() {
           </div>
         </CardSheet>
       )}
+    </div>
+  )
+}
+
+/** Cuántas cartas de cada sello llevas, y un aviso si al equipo le falta algo importante. */
+function ResumenDeSellos({ cartas }: { cartas: CardDef[] }) {
+  const cuenta = new Map(SELLOS_EN_ORDEN.map((s) => [s, 0]))
+  for (const c of cartas) if (c.kind === 'batalla') cuenta.set(selloDe(c), (cuenta.get(selloDe(c)) ?? 0) + 1)
+  const faltan: string[] = []
+  if (cartas.length > 0) {
+    if (!cuenta.get('tanque')) faltan.push('sin tanques, nadie aguanta delante')
+    if (!cuenta.get('asesino') && !cuenta.get('area')) faltan.push('sin asesinos ni área, los tanques rivales no caen')
+    if (!cuenta.get('apoyo')) faltan.push('sin apoyo, nadie cura')
+  }
+  return (
+    <div className="mb-2.5 rounded-xl border border-amber-900/50 bg-black/30 p-2">
+      <div className="flex flex-wrap gap-1">
+        {SELLOS_EN_ORDEN.map((s) => (
+          <span key={s} className="inline-flex items-center gap-1" title={SELLOS[s].nota}>
+            <SelloChapa sello={s} tam="mini" apagada={!cuenta.get(s)} />
+            <b className="text-[12px] text-amber-50">×{cuenta.get(s)}</b>
+          </span>
+        ))}
+      </div>
+      {faltan.length > 0 && <p className="mt-1.5 text-[11.5px] leading-snug text-amber-200/75">Ojo: {faltan.join(' · ')}.</p>}
     </div>
   )
 }

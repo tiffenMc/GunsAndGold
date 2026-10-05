@@ -1,3 +1,4 @@
+import { selloDe, torreSinDano } from './sellos'
 import { BUILTIN_BATTLE, BUILTIN_CARDS, BUILTIN_WEAPONS } from '../cards/catalog'
 import {
   DRAW_S,
@@ -784,7 +785,8 @@ describe('estilos de combate', () => {
     spawnUnit(battle, 0, por('rebote'), { x: 0, z: 2 }, 'excelente')
     const a = blanco(battle, 0, -1)
     const b = blanco(battle, 1.5, -1.5)
-    run(battle, 4)
+    // (Es de área: dispara despacio, y entre medias suelta su habilidad.)
+    run(battle, 7)
     expect(a.shields).toBeLessThan(20)
     expect(b.shields).toBeLessThan(20)
   })
@@ -886,7 +888,8 @@ describe('torres', () => {
   })
 
   it('el guardian (torre de cuerpo a cuerpo) golpea a los que pasan a su lado y los frena', () => {
-    const melee = BUILTIN_BATTLE.find((c) => c.estilo === 'matón')!
+    // (Uno de cuerpo a cuerpo que no sea tanque: la torre del tanque no pega, solo frena.)
+    const melee = BUILTIN_BATTLE.find((c) => c.estilo === 'furia')!
     const battle = createBattle({ decks: [[melee, ...deck], deck], seed: 72 })
     const g = spawnUnit(battle, 0, melee, { x: 0, z: 4 }, 'excelente', false)
     hacerTorre(battle, g)
@@ -1019,6 +1022,14 @@ describe('defensas de torre', () => {
       for (let t = 0; t < 6; t += 1 / 30) {
         step(battle, 1 / 30)
         for (const event of drainEvents(battle)) if (event.type === 'habilidad' && event.unitId === torre.id) solto = true
+      }
+      // Las torres de tanque y de control no sueltan habilidad: frenan (y aturden, congelan o
+      // empujan) a los que entran en su zona.
+      if (torreSinDano(selloDe(carta))) {
+        expect(torre.z).toBeCloseTo(6, 1)
+        expect(enemigos.some((u) => u.slowUntil > battle.time - 0.5)).toBe(true)
+        expect(enemigos.every((u) => u.shields === 30)).toBe(true)
+        return
       }
       expect(solto).toBe(true)
       expect(torre.z).toBeCloseTo(6, 1)
