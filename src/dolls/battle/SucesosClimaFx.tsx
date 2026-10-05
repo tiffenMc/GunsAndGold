@@ -356,7 +356,8 @@ function Rayo({ s, battle }: { s: Extract<Suceso, { k: 'rayo' }>; battle: Battle
           <cylinderGeometry args={[0.7, 0.7, 16, 10, 1, true]} />
           <meshBasicMaterial color="#93c5fd" {...brillo} opacity={0.22} blending={AdditiveBlending} side={DoubleSide} />
         </mesh>
-        <pointLight position={[0, 2.5, 0]} intensity={45} distance={18} color="#dbeafe" />
+        {/* (Sin luz de verdad: añadir una a media partida obliga a recompilar todos los materiales y
+            la partida se para. El resplandor y el halo ya dan el fogonazo.) */}
       </group>
       <mesh ref={halo} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]} visible={false}>
         <circleGeometry args={[s.r, 32]} />

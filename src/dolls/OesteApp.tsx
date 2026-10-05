@@ -12,7 +12,7 @@ import { jugadorDeCuenta } from './auth/cuentaJugador'
 import { PersonajesScreen } from './game/PersonajesScreen'
 import { atarPersonaje, objetivosDeHoy, personajesDe, pintaDe, players, sobresPendientes, switchPlayer } from './game/players'
 import { EN_LA_TARIMA, useRanking } from './game/ranking'
-import { rangoDe } from './game/progreso'
+import { LINGOTES_GANANDO, LINGOTES_PERDIENDO, MONEDAS_MAX, MONEDAS_MIN, PROB_DIAMANTE, rangoDe } from './game/progreso'
 import { abandonarPartida, costeDeIrse, empezarPartida, terminarPartida } from './game/jugar'
 import type { Billete } from './game/jugar'
 import type { Botin, Encargo, Premio } from './game/partidas'
@@ -104,8 +104,35 @@ export function Loading() {
  * La barra de arriba del mundo: tu careto, tu rango, tus monedas, los sobres por abrir y los
  * ajustes. Lo justo: el resto está en los sitios del pueblo.
  */
-function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha }: { lugar: Lugar; onSobres: () => void; onAjustes: () => void; onFicha: () => void }) {
+/** Lo que se cuenta de cada moneda en el cuadro de la bolsa. */
+const MONEDAS_DEL_JUEGO = [
+  {
+    icono: 'monedas',
+    color: 'text-amber-200',
+    nombre: 'Monedas',
+    que: 'Son tu rango: cuantas más tengas, más alto sales en Los Más Buscados.',
+    como: `En las partidas de rango (El Fuerte, en el desierto): si ganas te llevas de ${MONEDAS_MIN} a ${MONEDAS_MAX} del rival; si pierdes, te las quita él.`,
+  },
+  {
+    icono: 'lingotes',
+    color: 'text-yellow-300',
+    nombre: 'Lingotes de oro',
+    que: 'Para comprar ropa, sombreros, armas y colores en La Sastrería.',
+    como: `Siempre caen en las partidas de rango: ${LINGOTES_GANANDO} si ganas y ${LINGOTES_PERDIENDO} si pierdes.`,
+  },
+  {
+    icono: 'diamantes',
+    color: 'text-cyan-300',
+    nombre: 'Diamantes',
+    que: 'Para lo más especial de La Sastrería (chistera, abrigo, oro puro…) y para guardar animaciones dibujadas.',
+    como: `Salen de vez en cuando al azar en las partidas de rango (más o menos 1 de cada ${Math.round(1 / PROB_DIAMANTE)}).`,
+  },
+] as const
+
+function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha, onIr }: { lugar: Lugar; onSobres: () => void; onAjustes: () => void; onFicha: () => void; onIr: (donde: Lugar, zona: Zona) => void }) {
   const player = usePlayer()
+  /** El cuadro de la bolsa: qué es cada moneda y cómo se consigue. */
+  const [bolsa, setBolsa] = useState(false)
   const cards = useGameCards()
   const avatar = cards.find((card) => card.id === player.avatar)
   const rango = rangoDe(player.monedas)
@@ -134,7 +161,12 @@ function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha }: { lugar: Lugar; 
           {lugar === 'pueblo' ? '🤠 El pueblo' : '🏜️ El desierto'}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="pointer-events-auto flex items-center gap-2 rounded-full border-2 border-[#6b4423] bg-[#1a0f06]/85 px-2.5 py-1 font-west text-[16px] text-amber-200">
+          <button
+            type="button"
+            onClick={() => setBolsa((v) => !v)}
+            title="¿Qué es cada moneda?"
+            className="pointer-events-auto flex items-center gap-2 rounded-full border-2 border-[#6b4423] bg-[#1a0f06]/85 px-2.5 py-1 font-west text-[16px] text-amber-200 active:scale-95"
+          >
             <span title="Monedas (tu rango)">
               <Icono nombre="monedas" /> {player.monedas}
             </span>
@@ -144,7 +176,7 @@ function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha }: { lugar: Lugar; 
             <span className="text-cyan-300" title="Diamantes">
               <Icono nombre="diamantes" /> {player.diamantes}
             </span>
-          </span>
+          </button>
           {player.sobres.length > 0 && (
             <button
               type="button"
@@ -169,6 +201,38 @@ function BarraDeArriba({ lugar, onSobres, onAjustes, onFicha }: { lugar: Lugar; 
           </button>
         </div>
       </div>
+      {bolsa && (
+        <div className="pointer-events-auto sobre-entra ml-auto mt-2 w-[min(360px,100%)] rounded-2xl border-2 border-[#6b4423] bg-[#1a0f06]/95 p-3 text-left shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+          <div className="flex items-center justify-between">
+            <p className="font-west text-[18px] leading-none text-amber-50">Tu bolsa</p>
+            <button type="button" onClick={() => setBolsa(false)} className="rounded-lg bg-black/40 px-2 py-1 text-[12px] font-bold text-amber-100">
+              Cerrar
+            </button>
+          </div>
+          <div className="mt-2 space-y-2">
+            {MONEDAS_DEL_JUEGO.map((m) => (
+              <div key={m.nombre} className="rounded-xl bg-black/35 p-2">
+                <p className={`flex items-center gap-1.5 font-west text-[16px] leading-none ${m.color}`}>
+                  <Icono nombre={m.icono} /> {m.nombre}
+                  <span className="ml-auto">{m.icono === 'monedas' ? player.monedas : m.icono === 'lingotes' ? player.lingotes : player.diamantes}</span>
+                </p>
+                <p className="mt-1 text-[12.5px] leading-snug text-amber-100/85">{m.que}</p>
+                <p className="mt-0.5 text-[12px] leading-snug text-amber-200/60">
+                  <b>Cómo se consiguen:</b> {m.como}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className="boton flex-1 py-1.5 text-[12.5px]" onClick={() => (setBolsa(false), onIr('desierto', 'rango'))}>
+              <Icono nombre="partida" /> Al Fuerte
+            </button>
+            <button type="button" className="boton boton-fantasma flex-1 py-1.5 text-[12.5px]" onClick={() => (setBolsa(false), onIr('pueblo', 'sastreria'))}>
+              <Icono nombre="sastreria" /> A la Sastrería
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -783,7 +847,7 @@ export function OesteApp() {
                 }
               >
                 <Mundo lugar={lugar} pausado={zona !== null || viaje !== null || ajustes} onEntrar={entrar}>
-                  <BarraDeArriba lugar={lugar} onSobres={() => setSobres(true)} onAjustes={() => setAjustes(true)} onFicha={() => abrir('pueblo', 'tablon')} />
+                  <BarraDeArriba lugar={lugar} onSobres={() => setSobres(true)} onAjustes={() => setAjustes(true)} onFicha={() => abrir('pueblo', 'tablon')} onIr={(donde, sitio) => abrir(donde, sitio)} />
                 </Mundo>
               </SafeCanvas>
             )}

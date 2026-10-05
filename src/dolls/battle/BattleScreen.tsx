@@ -1,7 +1,7 @@
 import { Html, PerformanceMonitor } from '@react-three/drei'
 import { Icono } from '../Icono'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 import type { Group, OrthographicCamera } from 'three'
@@ -40,10 +40,11 @@ import {
   weaponCard,
 } from './engine'
 import type { Battle, BattleEvent, Pace, Side, Unit, Vec } from './engine'
-import { FX_MAX_LIFE, FxLayer, GroundMark, RangoTorre, Ribbon, TroopShots, WeaponBullets, fortHitPoint } from './Effects'
+import { FX_MAX_LIFE, FxLayer, GroundMark, RangoTorre, Ribbon, Tajos, TroopShots, WeaponBullets, fortHitPoint } from './Effects'
+import type { Tajo } from './Effects'
 import type { RangoData } from './Effects'
 import type { Fx, RibbonData } from './Effects'
-import { Field } from './Field'
+import { Field, SIDE_COLOR } from './Field'
 import { FieldUnit } from './FieldUnit'
 import { HandHud } from './HandHud'
 import type { DragState, HandView } from './HandHud'
@@ -54,12 +55,17 @@ import { bala, disparo, precargarBatalla, precargarDisparos, rebote, ruleta as s
 import { CLIMAS, ajusteDeDisparos, climaAlAzar, climaInfo } from './clima'
 import type { Clima } from './clima'
 import { ClimaFx } from './ClimaFx'
+import { CalentarMateriales } from './calentar'
 import { nombreDeRival, pullaDe } from './taunts'
 import { precargarVoces } from './voices'
 import { usePlayer } from '../game/players'
 import type { ResumenDeBatalla } from '../game/incursiones'
 import { SmokeClouds, TunnelPortals, ZapField } from './Specials'
 import { HabilidadesLayer } from './EfectosHabilidad'
+import { CartelDeCarta, ChapaDeLaMano } from './Carteles'
+import type { Anuncio } from './Carteles'
+import { NumerosDeDano } from './Numeros'
+import type { Numero } from './Numeros'
 import { PantallaClima, SucesosClimaFx } from './SucesosClimaFx'
 import type { AccionRemota, Sala } from '../red/sala'
 import { aplicarFoto, espejo, tomarFoto } from '../red/foto'
@@ -360,8 +366,23 @@ function Driver({
   return null
 }
 
+/**
+ * Las capas que se mueven solas (cada fotograma, sin React): no tienen por qué volver a pintarse
+ * cada vez que cambia el marcador. Con muchos muñecos en el campo, eso era lo que más pesaba.
+ */
+const Muneco = memo(FieldUnit)
+const Tiros = memo(TroopShots)
+const Balas = memo(WeaponBullets)
+const Habilidades = memo(HabilidadesLayer)
+const SucesosDelClima = memo(SucesosClimaFx)
+
+/** Mientras arrastras una carta, su chapa no se queda colgada en el hueco. */
+function seEstaArrastrando(view: HandView, slot: number): boolean {
+  return view.holding === slot
+}
+
 /** Lleva la lista de muñecos del campo: solo re-pinta cuando entra o sale alguno. */
-function Units({ battle, paceRef }: { battle: Battle; paceRef: MutableRefObject<Pace> }) {
+const Units = memo(function Units({ battle, paceRef }: { battle: Battle; paceRef: MutableRefObject<Pace> }) {
   const [ids, setIds] = useState<number[]>([])
   const key = useRef('')
   useFrame(() => {
@@ -376,11 +397,11 @@ function Units({ battle, paceRef }: { battle: Battle; paceRef: MutableRefObject<
     <group>
       {ids.map((id) => {
         const unit = battle.units.find((u) => u.id === id)
-        return unit ? <FieldUnit key={id} unit={unit} battle={battle} paceRef={paceRef} /> : null
+        return unit ? <Muneco key={id} unit={unit} battle={battle} paceRef={paceRef} /> : null
       })}
     </group>
   )
-}
+})
 
 function PopupLayer({ items }: { items: Popup[] }) {
   return (
@@ -601,6 +622,12 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   const [callout, setCallout] = useState<{ text: string; key: number } | null>(null)
   /** Los bocadillos de las cartas (pulla al salir al campo). */
   const [globos, setGlobos] = useState<Globo[]>([])
+  /** La última carta que ha sacado cada bando (el cartel de arriba y el de abajo). */
+  const [anuncios, setAnuncios] = useState<[Anuncio | null, Anuncio | null]>([null, null])
+  /** Los números de daño que faltan por pintar (los coge la capa de números al momento). */
+  const numeros = useRef<Numero[]>([])
+  /** Los golpes de cerca que faltan por pintar (el tajo del color del bando). */
+  const tajos = useRef<Tajo[]>([])
   /** El principio: cartel de "VS" → ruleta del clima → partida. En modo prueba se entra directo. */
   /** La resolucion de dibujo: se ajusta sola segun lo bien que vaya (ver PerformanceMonitor). */
   const [calidad, setCalidad] = useState(1.5)
@@ -858,6 +885,20 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     return () => observer.disconnect()
   }, [])
 
+  // Cada cartel de carta se va solo a los pocos segundos (si sale otra del mismo bando, la cambia).
+  const anuncioMio = anuncios[0]?.key
+  const anuncioRival = anuncios[1]?.key
+  useEffect(() => {
+    if (anuncioMio === undefined) return
+    const id = setTimeout(() => setAnuncios((a) => (a[0]?.key === anuncioMio ? [null, a[1]] : a)), 2800)
+    return () => clearTimeout(id)
+  }, [anuncioMio])
+  useEffect(() => {
+    if (anuncioRival === undefined) return
+    const id = setTimeout(() => setAnuncios((a) => (a[1]?.key === anuncioRival ? [a[0], null] : a)), 3200)
+    return () => clearTimeout(id)
+  }, [anuncioRival])
+
   useEffect(() => {
     if (!callout) return
     const id = setTimeout(() => setCallout(null), 1700)
@@ -949,7 +990,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     // (Estos dos solo cambian si hay algo que quitar: no re-pintan por nada.)
     setPopups((list) => (list.some((p) => now - p.born > 1.2) ? list.filter((p) => now - p.born <= 1.2) : list))
     // Los bocadillos duran algo mas: da tiempo a leerlos antes de que se vayan.
-    setGlobos((list) => (list.some((g) => now - g.born > 3.4) ? list.filter((g) => now - g.born <= 3.4) : list))
+    setGlobos((list) => (list.some((g) => now - g.born > 2.4) ? list.filter((g) => now - g.born <= 2.4) : list))
   }, [battle, drawKeys])
 
   const onEvents = useCallback(
@@ -960,6 +1001,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
       const newFx: Fx[] = []
       const newPopups: Popup[] = []
       const newGlobos: Globo[] = []
+      const nuevosAnuncios: (Anuncio | null)[] = [null, null]
       const now = performance.now() / 1000
       for (const event of events) {
         switch (event.type) {
@@ -1006,6 +1048,8 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             // Cada carta tiene su frase al entrar al campo y suelta una pulla en un bocadillo.
             const unit = battle.units.find((item) => item.id === event.unitId)
             if (unit) {
+              // El cartel de la carta que acaba de salir: quién es y para qué sirve.
+              nuevosAnuncios[event.side] = { card: unit.card, side: event.side, key: nextId.current++ }
               sfx.carta(unit.card.id, event.quality, event.side === 0)
               // Solo las cartas grandes sueltan su pulla: asi el campo no se llena de bocadillos.
               const grande = rarityOf(unit.card) === 'epica' || rarityOf(unit.card) === 'divina'
@@ -1118,18 +1162,26 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           case 'troopShot':
             // Las tropas tambien disparan: suena la bala (con limite, que son muchas a la vez).
             bala(event.side === 0)
+            // El golpe de cerca no lleva bala: se pinta el tajo en el que lo recibe.
+            if (event.melee && event.hacia) {
+              tajos.current.push({ x: event.hacia.x, z: event.hacia.z, desdeX: event.x, desdeZ: event.z, side: event.side, golpe: event.golpe ?? 1 })
+            }
             break
-          case 'unitHit':
+          case 'unitHit': {
+            // Quien pega es el otro bando: su color en la chispa y en el número.
+            const pega = (1 - event.side) as Side
             if (event.weapon) {
-              // Impacto del arma: un anillo y una sacudida (sin numeros). Se ve claro que le has dado.
+              // Impacto del arma: un anillo y una sacudida. Se ve claro que le has dado.
               newFx.push({ id: nextId.current++, kind: 'hit', x: event.x, z: event.z, r: 1, color: '#ffd166', born: clock })
               shake.current = Math.max(shake.current, 0.35)
               sfx.hit()
-            } else if (event.amount >= 1) {
-              // Un tiro normal entre soldados: solo una chispa, sin numeros (si no, el campo se llena de adornos).
-              newFx.push({ id: nextId.current++, kind: 'spark', x: event.x, z: event.z, r: 0.7, color: '#ffffff', born: clock })
+            } else if (event.amount >= 0.5) {
+              newFx.push({ id: nextId.current++, kind: 'spark', x: event.x, z: event.z, r: 0.5 + Math.min(3, event.amount) * 0.25, color: SIDE_COLOR[pega], born: clock })
             }
+            // Lo que quita, en grande si es mucho (los seguidos al mismo muñeco se suman).
+            if (event.amount > 0) numeros.current.push({ x: event.x, z: event.z, cantidad: event.amount, side: pega, clave: `u${event.unitId}` })
             break
+          }
           case 'smoke':
             sfx.carta('humo')
             setCallout({ text: event.side === 0 ? '¡HUMO!' : '¡HUMO ENEMIGO!', key: nextId.current++ })
@@ -1189,6 +1241,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           case 'fortHit': {
             const p = fortHitPoint(event.side)
             newFx.push({ id: nextId.current++, kind: 'fort', x: p.x, z: p.z, r: 1, color: '#ffb347', born: clock })
+            numeros.current.push({ x: p.x, z: p.z, cantidad: event.damage, side: (1 - event.side) as Side, clave: `f${event.side}`, fuerte: true })
             sfx.fort()
             break
           }
@@ -1279,8 +1332,11 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
         setFx((list) => [...list.filter((item) => clock - item.born < FX_MAX_LIFE), ...newFx].slice(-60))
       }
       if (newPopups.length > 0) setPopups((list) => [...list, ...newPopups].slice(-12))
-      // Como mucho tres bocadillos a la vez, para que no se tapen unos a otros.
-      if (newGlobos.length > 0) setGlobos((list) => [...list, ...newGlobos].slice(-3))
+      // Como mucho dos bocadillos a la vez, para que no se tapen unos a otros (ni al campo).
+      if (newGlobos.length > 0) setGlobos((list) => [...list, ...newGlobos].slice(-2))
+      if (nuevosAnuncios[0] || nuevosAnuncios[1]) {
+        setAnuncios((antes) => [nuevosAnuncios[0] ?? antes[0], nuevosAnuncios[1] ?? antes[1]])
+      }
     },
     [],
   )
@@ -1659,7 +1715,10 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           intensity={esDia ? 0.7 : 0.55}
           color={esDia ? '#ff9d5c' : '#6f8ad8'}
         />
-        {!esDia && <directionalLight position={[-6, 14, -12]} intensity={0.75} color="#dbe8ff" />}
+        {/* La luz de la noche está siempre (de día, apagada): que cambie el número de luces obliga a
+            recompilar todos los materiales, y eso para la partida. */}
+        <directionalLight position={[-6, 14, -12]} intensity={esDia ? 0 : 0.75} color="#dbe8ff" />
+        <CalentarMateriales donde="campo" />
         <ClimaFx info={info} />
         <CamaraViva cameraRef={cameraRef} baseRef={camBase} battle={battle} activa={camActiva} focus={finalFocus} punch={punch} />
         <Driver
@@ -1712,8 +1771,9 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             accent={weaponAccent}
             target={aimTarget}
           />
-          <TroopShots battle={battle} />
-          <WeaponBullets battle={battle} />
+          <Tiros battle={battle} />
+          <Balas battle={battle} />
+          <Tajos cola={tajos} />
           <GroundMark data={mark} />
           <RangoTorre data={rango} />
           {/* Las dos bocas del tunel mientras lo colocas. */}
@@ -1724,9 +1784,10 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           <ZapField battle={battle} />
           <TunnelPortals battle={battle} />
           {/* Las habilidades de cada muñeco: zonas, proyectiles, rayos, conos de fuego… */}
-          <HabilidadesLayer battle={battle} />
-          <SucesosClimaFx battle={battle} />
+          <Habilidades battle={battle} />
+          <SucesosDelClima battle={battle} />
           <FxLayer items={fx} />
+          <NumerosDeDano cola={numeros} />
           <PopupLayer items={popups} />
           <GloboLayer items={globos} />
         </ShakeGroup>
@@ -2053,6 +2114,17 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
 
       {fase === 'listo' && <PantallaClima battle={battle} />}
 
+      {/* ---------- La carta que acaba de sacar cada uno: quién es y para qué sirve ---------- */}
+      {anuncios[1] && !over && <CartelDeCarta anuncio={anuncios[1]} top={snap.cart ? 112 : 62} />}
+      {anuncios[0] && !over && <CartelDeCarta anuncio={anuncios[0]} top={layout.handTop - 150} />}
+      {/* ---------- El papel de cada carta de la mano: por qué sacarla ---------- */}
+      {fase === 'listo' &&
+        !over &&
+        handView.slots.map((slot, i) => {
+          const rect = layout.slots[i]
+          if (!slot.card || !rect || seEstaArrastrando(handView, i)) return null
+          return <ChapaDeLaMano key={`${i}-${slot.drawKey}`} card={slot.card} left={rect.x} top={rect.y + rect.h - 9} width={rect.w} apagada={slot.dimmed ?? false} />
+        })}
       {callout && !over && (
         <div key={callout.key} className="pointer-events-none absolute inset-x-0 top-[34%] z-[16] flex justify-center px-4 text-center">
           <span

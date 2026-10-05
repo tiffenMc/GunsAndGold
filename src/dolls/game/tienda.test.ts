@@ -12,7 +12,9 @@ import {
   pintaDe,
   ponerPinta,
   switchPlayer,
+  updatePlayer,
 } from './players'
+import { BUILTIN_BATTLE } from '../cards/catalog'
 import { LINGOTES_GANANDO, LINGOTES_PERDIENDO, botinDeRango } from './progreso'
 import { ARTICULOS, PRECIO_ANIMACION, articulo, articulosDePago, loQueFalta } from './tienda'
 
@@ -73,7 +75,7 @@ describe('la Sastrería', () => {
     const look = { ...pintaDe(getPlayer()), hat: 'chistera' as const, hatColor: '#e2b007' }
     expect(loQueFalta(look, [])).toEqual(['sombrero:chistera', 'color:oro'])
     expect(ponerPinta(look)).toContain('Te falta comprar')
-    expect(getPlayer().pinta).toBeUndefined()
+    expect(getPlayer().pinta?.hat).not.toBe('chistera')
     ganarBotin({ lingotes: 0, diamantes: 4 })
     expect(comprar('sombrero:chistera')).toBeNull()
     expect(comprar('color:oro')).toBeNull()
@@ -130,5 +132,15 @@ describe('las animaciones dibujadas', () => {
     expect(player.diamantes).toBe(0)
     expect(player.animaciones).toHaveLength(1)
     expect(animacionDe(player)?.nombre).toBe('Zigzag')
+  })
+})
+
+describe('el retrato y tu muñeco', () => {
+  it('cambiar de retrato no cambia cómo va vestido tu vaquero', () => {
+    nuevo('Retratado')
+    const antes = JSON.stringify(pintaDe(getPlayer()))
+    const otro = BUILTIN_BATTLE.find((c) => c.id !== getPlayer().avatar)!
+    updatePlayer({ avatar: otro.id })
+    expect(JSON.stringify(pintaDe(getPlayer()))).toBe(antes)
   })
 })

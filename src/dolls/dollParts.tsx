@@ -159,7 +159,7 @@ const BakeCtx = createContext<BakeScope | null>(null)
 export const OutlineCtx = createContext<string | null>(null)
 const outlineMaterials = new Map<string, MeshBasicMaterial>()
 
-function outlineMaterial(color: string): MeshBasicMaterial {
+export function outlineMaterial(color: string): MeshBasicMaterial {
   const hecho = outlineMaterials.get(color)
   if (hecho) return hecho
   const material = new MeshBasicMaterial({ color, side: BackSide, toneMapped: false })
@@ -233,7 +233,13 @@ function fuse(items: BakeItem[]): BufferGeometry | null {
  * Pinta lo que lleva dentro como UNA sola malla. `bakeKey` dice de que aspecto es: los muñecos
  * con el mismo aspecto comparten la malla ya fundida y ni siquiera vuelven a montar las piezas.
  */
-export function Baked({ bakeKey, children, standard = false }: { bakeKey: string; children: ReactNode; standard?: boolean }) {
+export function Baked(props: { bakeKey: string; children: ReactNode; standard?: boolean }) {
+  // Si cambia el aspecto (el mismo muñeco se viste de otra forma), se funde de nuevo: con la llave
+  // React monta otra pieza en vez de quedarse con la malla de antes.
+  return <BakedFundido key={props.bakeKey} {...props} />
+}
+
+function BakedFundido({ bakeKey, children, standard = false }: { bakeKey: string; children: ReactNode; standard?: boolean }) {
   const [geometry, setGeometry] = useState<BufferGeometry | null>(() => bakedCache.get(bakeKey) ?? null)
   const scope = useMemo<BakeScope>(() => ({ items: [], matrix: IDENTITY }), [])
   useLayoutEffect(() => {

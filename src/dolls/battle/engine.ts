@@ -474,7 +474,8 @@ export type BattleEvent =
   | { type: 'cartBlocked'; x: number; z: number }
   | { type: 'cartHit'; side: Side; damage: number; hp: number; maxHp: number }
   | { type: 'cartClaimed'; side: Side }
-  | { type: 'troopShot'; side: Side; x: number; z: number }
+  /** Una tropa dispara (o pega): hacia dónde, cuánto quita y si es de cerca (para pintar el tajo). */
+  | { type: 'troopShot'; side: Side; x: number; z: number; hacia?: Vec; golpe?: number; melee?: boolean }
   | { type: 'spawn'; unitId: number; x: number; z: number; quality: QualityId; side: Side }
   | { type: 'unitHit'; unitId: number; x: number; z: number; side: Side; weapon: boolean; amount: number }
   | { type: 'unitDeath'; unitId: number; x: number; z: number; side: Side }
@@ -1613,9 +1614,7 @@ function launchTroopShot(battle: Battle, unit: Unit) {
   }
   const d = M.hypot(to.x - unit.x, to.z - unit.z)
   unit.lastShotAt = battle.time
-  // La tropa dispara: la escena lo oye (ruido de bala) y la animacion se dispara por su cuenta.
-  battle.events.push({ type: 'troopShot', side: unit.side, x: unit.x, z: unit.z })
-  battle.shots.push({
+  const shot: TroopShot = {
     id: battle.nextId++,
     side: unit.side,
     from: { x: unit.x, z: unit.z },
@@ -1634,7 +1633,11 @@ function launchTroopShot(battle: Battle, unit: Unit) {
     marca: unit.card.clase === 'indios',
     frena: unit.torre && unit.estilo.cuerpo !== undefined,
     deTorre: unit.torre,
-  })
+  }
+  // La tropa dispara: la escena lo oye (ruido de bala, el tajo si es de cerca) y la animacion se
+  // dispara por su cuenta.
+  battle.events.push({ type: 'troopShot', side: unit.side, x: unit.x, z: unit.z, hacia: { x: to.x, z: to.z }, golpe: shot.golpe, melee: shot.melee })
+  battle.shots.push(shot)
 }
 
 function separate(battle: Battle) {

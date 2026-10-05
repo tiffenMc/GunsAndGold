@@ -1,14 +1,46 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type { MutableRefObject } from 'react'
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide } from 'three'
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide, RingGeometry } from 'three'
 import type { Group, Mesh, MeshBasicMaterial } from 'three'
 import { FORT_R, fortPos } from './engine'
-import type { Battle, Vec } from './engine'
+import type { Battle, Side, TroopShot, Vec } from './engine'
+import { papelDelEstilo } from './papeles'
+import type { Papel } from './papeles'
 
 const POOL = 48
 
-/** Los tiros de las tropas: una bala con su estela que cruza de verdad hasta el objetivo. */
+/** El color de la estela de cada bando (algo más claro que el de su peana, para que brille). */
+const ESTELA: Record<Side, string> = { 0: '#7dd3fc', 1: '#ff7a7a' }
+
+/**
+ * Cómo se ve el tiro de cada papel: el tamaño de la bala, lo larga que es su estela y si va en
+ * perdigones. Así una ráfaga (muchas balitas cortas) no se parece a un francotirador (una estela
+ * larga y gorda) ni a un perforante (un rayo largo y fino).
+ */
+const FORMA: Partial<Record<Papel, { bala: number; estela: number; perdigones?: boolean }>> = {
+  rafaga: { bala: 0.8, estela: 0.65 },
+  pesado: { bala: 1.3, estela: 2.6 },
+  perfora: { bala: 0.95, estela: 3.4 },
+  rebote: { bala: 1.15, estela: 1.3 },
+  area: { bala: 1, estela: 0.8, perdigones: true },
+}
+
+const papeles = new Map<string, Papel>()
+function papelDelTiro(shot: TroopShot): Papel {
+  let papel = papeles.get(shot.estilo.id)
+  if (!papel) {
+    papel = papelDelEstilo(shot.estilo)
+    papeles.set(shot.estilo.id, papel)
+  }
+  return papel
+}
+
+/**
+ * Los tiros de las tropas: una bala con su estela que cruza de verdad hasta el objetivo. La estela
+ * va **del color de su bando** (así se sabe de quién es cada tiro), la bala es **más gorda cuanto
+ * más quita**, y cada papel tiene su forma.
+ */
 export function TroopShots({ battle }: { battle: Battle }) {
   const refs = useRef<(Group | null)[]>([])
   useFrame(() => {
@@ -21,7 +53,7 @@ export function TroopShots({ battle }: { battle: Battle }) {
         g.visible = false
         continue
       }
-      // Los golpes cuerpo a cuerpo llegan al instante: no hay nada que dibujar volando.
+      // Los golpes cuerpo a cuerpo llegan al instante: se pinta el tajo (ver `Tajos`), no una bala.
       if (shot.melee) {
         g.visible = false
         continue
@@ -43,16 +75,45 @@ export function TroopShots({ battle }: { battle: Battle }) {
       // La flecha y la lanza cabecean siguiendo su arco.
       const pitch = flecha || lanza ? Math.cos(k * Math.PI) * 0.5 : 0
       g.rotation.set(pitch, Math.atan2(shot.to.x - shot.from.x, shot.to.z - shot.from.z), 0)
-      g.userData.gun = gun
-      const tracer = g.children[0]
-      const stick = g.children[1]
-      const arrow = g.children[2]
-      const axe = g.children[3]
+      const [tracer, stick, arrow, axe, pellets] = g.children
+      const papel = papelDelTiro(shot)
+      const forma = FORMA[papel]
+      const enPerdigones = Boolean(forma?.perdigones) && !thrown && !flecha && !lanza && !hacha
+      // Al cambiar de tiro: el color de su bando y su tamaño (más gorda cuanto más quita).
+      if (g.userData.tiro !== shot.id) {
+        g.userData.tiro = shot.id
+        const fuerza = 0.75 + 0.35 * Math.min(3, Math.max(0.25, shot.golpe))
+        const color = ESTELA[shot.side]
+        if (tracer) {
+          const [cabeza, cola] = tracer.children as Mesh[]
+          ;(cabeza?.material as MeshBasicMaterial | undefined)?.color.set(shot.side === 0 ? '#e0f7ff' : '#ffe4e4')
+          ;(cola?.material as MeshBasicMaterial | undefined)?.color.set(color)
+          const b = fuerza * (forma?.bala ?? 1)
+          tracer.scale.set(b, b, b * (forma?.estela ?? 1))
+        }
+        if (pellets) {
+          for (const p of pellets.children as Mesh[]) (p.material as MeshBasicMaterial).color.set(color)
+          pellets.scale.setScalar(fuerza)
+        }
+        if (stick) {
+          const campo = shot.estilo.campo?.color
+          ;((stick as Mesh).material as MeshBasicMaterial).color.set(campo ?? '#b3261e')
+          stick.scale.setScalar(Math.max(1, fuerza * 0.9))
+        }
+      }
       if (stick) {
         stick.visible = thrown
         stick.rotation.x = k * 14
       }
-      if (tracer) tracer.visible = !thrown && !flecha && !lanza && !hacha
+      if (tracer) tracer.visible = !thrown && !flecha && !lanza && !hacha && !enPerdigones
+      if (pellets) {
+        pellets.visible = enPerdigones
+        // Los perdigones se abren en abanico según avanzan.
+        pellets.children.forEach((p, j) => {
+          p.position.x = (j - 1) * (0.12 + k * 0.5)
+          p.position.z = -Math.abs(j - 1) * 0.15
+        })
+      }
       if (arrow) {
         arrow.visible = flecha || lanza
         arrow.scale.set(lanza ? 1.5 : 1, lanza ? 1.5 : 1, lanza ? 1.7 : 1)
@@ -75,17 +136,17 @@ export function TroopShots({ battle }: { battle: Battle }) {
         >
           <group>
             <mesh>
-              <sphereGeometry args={[0.07, 8, 6]} />
+              <sphereGeometry args={[0.11, 8, 6]} />
               <meshBasicMaterial color="#fff2c4" toneMapped={false} />
             </mesh>
-            <mesh position={[0, 0, -0.32]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.035, 0.005, 0.6, 6]} />
-              <meshBasicMaterial color="#ffc861" transparent opacity={0.7} toneMapped={false} />
+            <mesh position={[0, 0, -0.45]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.075, 0.01, 0.9, 6]} />
+              <meshBasicMaterial color="#ffc861" transparent opacity={0.85} toneMapped={false} />
             </mesh>
           </group>
           <mesh>
             <cylinderGeometry args={[0.06, 0.06, 0.34, 8]} />
-            <meshStandardMaterial color="#b3261e" />
+            <meshBasicMaterial color="#b3261e" toneMapped={false} />
           </mesh>
           {/* La flecha (y la lanza, mas grande): asta, punta y plumas */}
           <group visible={false}>
@@ -107,7 +168,88 @@ export function TroopShots({ battle }: { battle: Battle }) {
             <boxGeometry args={[0.08, 0.34, 0.22]} />
             <meshBasicMaterial color="#b8c2cf" toneMapped={false} />
           </mesh>
+          {/* Los perdigones (los de área): tres bolitas que se abren */}
+          <group visible={false}>
+            {[0, 1, 2].map((j) => (
+              <mesh key={j}>
+                <sphereGeometry args={[0.1, 6, 5]} />
+                <meshBasicMaterial color="#ffc861" toneMapped={false} />
+              </mesh>
+            ))}
+          </group>
         </group>
+      ))}
+    </group>
+  )
+}
+
+export interface Tajo {
+  x: number
+  z: number
+  /** Desde dónde llega el golpe (para que el tajo barra hacia el blanco). */
+  desdeX: number
+  desdeZ: number
+  side: Side
+  golpe: number
+}
+
+const TAJOS = 14
+const TAJO_S = 0.28
+
+/**
+ * **Los golpes de cerca**: un tajo curvo del color del bando que barra al que recibe el golpe. Más
+ * grande cuanto más quita. (Antes no se pintaba nada: no se sabía quién pegaba a quién.)
+ */
+export function Tajos({ cola }: { cola: MutableRefObject<Tajo[]> }) {
+  const refs = useRef<(Mesh | null)[]>([])
+  const vivos = useRef(Array.from({ length: TAJOS }, () => ({ edad: 1, giro: 0, tam: 1 })))
+  const siguiente = useRef(0)
+  const geometria = useMemo(() => new RingGeometry(0.62, 1, 18, 1, 0, Math.PI * 0.75), [])
+  useEffect(() => () => geometria.dispose(), [geometria])
+  useFrame((_, dt) => {
+    for (const t of cola.current.splice(0)) {
+      const i = siguiente.current
+      siguiente.current = (i + 1) % TAJOS
+      const m = refs.current[i]
+      if (!m) continue
+      const v = vivos.current[i]!
+      v.edad = 0
+      v.giro = Math.atan2(t.x - t.desdeX, t.z - t.desdeZ)
+      v.tam = 0.8 + Math.min(3, t.golpe) * 0.3
+      m.position.set(t.x, 1.15, t.z)
+      ;(m.material as MeshBasicMaterial).color.set(ESTELA[t.side])
+    }
+    for (let i = 0; i < TAJOS; i++) {
+      const m = refs.current[i]
+      const v = vivos.current[i]!
+      if (!m) continue
+      if (v.edad >= TAJO_S) {
+        m.visible = false
+        continue
+      }
+      v.edad += dt
+      const k = Math.min(1, v.edad / TAJO_S)
+      m.visible = true
+      // Tumbado en el suelo, barre de un lado a otro delante del blanco y se va.
+      m.rotation.set(-Math.PI / 2, 0, -v.giro + Math.PI * 0.2 - k * Math.PI * 0.9)
+      m.scale.setScalar(v.tam * (0.75 + k * 0.45))
+      ;(m.material as MeshBasicMaterial).opacity = 1 - k * k
+    }
+  })
+  return (
+    <group>
+      {Array.from({ length: TAJOS }, (_, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el
+          }}
+          geometry={geometria}
+          visible={false}
+          renderOrder={8}
+        >
+          <meshBasicMaterial color="#ffffff" transparent side={DoubleSide} depthWrite={false} toneMapped={false} />
+        </mesh>
       ))}
     </group>
   )

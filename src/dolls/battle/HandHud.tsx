@@ -1,12 +1,13 @@
 import { Hud, OrthographicCamera } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Group } from 'three'
 import type { CardDef } from '../cards/model'
 import { CARD_W } from '../card3d/cardArt'
 import { TrappedCard } from '../card3d/TrappedCard'
 import type { HudLayout, Rect } from './layout'
+import { CalentarMateriales } from './calentar'
 
 export interface DragState {
   active: boolean
@@ -29,7 +30,8 @@ export interface HandView {
   holding: number | null
 }
 
-function HandCard({
+/** (Cada carta solo se vuelve a pintar si cambia algo suyo: el resto se mueve solo.) */
+const HandCard = memo(function HandCard({
   card,
   rect,
   layout,
@@ -117,7 +119,7 @@ function HandCard({
       </group>
     </group>
   )
-}
+})
 
 export function HandHud({
   layout,
@@ -134,6 +136,7 @@ export function HandHud({
       <ambientLight intensity={0.9} color="#ffe9c8" />
       <directionalLight position={[120, 260, 500]} intensity={2.2} color="#fff1d4" />
       <directionalLight position={[-300, -100, 300]} intensity={0.6} color="#ff9d5c" />
+      <CalentarMateriales donde="mano" />
       {/* Bandeja de la mano: madera oscura, y el hueco del arma en azul (defensa) */}
       <mesh position={[0, -layout.height / 2 + (layout.height - layout.handTop) / 2, -300]}>
         <planeGeometry args={[layout.width, layout.height - layout.handTop]} />
