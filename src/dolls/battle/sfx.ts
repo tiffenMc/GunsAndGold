@@ -137,9 +137,9 @@ export function disparo(weaponId: string, tuyo = true): void {
 export const BATALLA = ['bala', 'rebote']
 
 /** Lo que suena la bala de una tropa. Flojo: son muchas por segundo y no pueden tapar nada. */
-const VOLUMEN_BALA = 0.28
+const VOLUMEN_BALA = 0.18
 /** Dos balas mas seguidas que esto se comen: asi no se solapan cuando disparan cinco a la vez. */
-const BALA_MIN_MS = 90
+const BALA_MIN_MS = 140
 
 function rutaBatalla(nombre: string): string {
   return `${import.meta.env.BASE_URL}sonidos/batalla/${nombre}.wav`
@@ -166,6 +166,56 @@ export function bala(tuyo = true): void {
     ganancia: fuerza(VOLUMEN_BALA * (tuyo ? 1 : 0.5)),
     tono: 0.92 + Math.random() * 0.16,
   })
+}
+
+/**
+ * Cómo suena el ataque de cada tipo de soldado: el pistolero, revólver; el francotirador y el
+ * perforante, rifle; los de área, escopeta (y el cañón y la dinamita, su estruendo); la ráfaga,
+ * la ametralladora; y los de cuerpo a cuerpo, un golpe seco (sin pólvora). Así cada carta se oye
+ * distinta. Va bajito y con un mínimo entre tiro y tiro: con cinco disparando a la vez no atruena.
+ */
+export type SonidoDeTropa = 'revolver' | 'rifle' | 'escopeta' | 'dinamita' | 'bufalo' | 'gatling' | 'golpe' | 'flecha' | 'nada'
+
+const VOLUMEN_TROPA: Record<SonidoDeTropa, number> = {
+  revolver: 0.16,
+  rifle: 0.2,
+  escopeta: 0.18,
+  dinamita: 0.2,
+  bufalo: 0.22,
+  gatling: 0.1,
+  golpe: 0.2,
+  flecha: 0.14,
+  nada: 0,
+}
+const ultimoDe = new Map<SonidoDeTropa, number>()
+
+export function tiroDeTropa(tipo: SonidoDeTropa, tuyo = true): void {
+  if (tipo === 'nada') return
+  const ahora = performance.now()
+  // Cada tipo, como mucho un tiro cada poco (la ametralladora, menos aún); y entre todos, también.
+  if (ahora - (ultimoDe.get(tipo) ?? 0) < (tipo === 'gatling' ? 260 : 170)) return
+  if (ahora - ultimaBala < 70) return
+  ultimoDe.set(tipo, ahora)
+  ultimaBala = ahora
+  const volumen = VOLUMEN_TROPA[tipo] * (tuyo ? 1 : 0.55)
+  if (tipo === 'flecha') {
+    // El silbido de la flecha (o la lanza) al salir.
+    burst(volumen, 0.16, 3600, 'bandpass')
+    tone(900, 520, 0.12, volumen * 0.25, 'sine')
+    return
+  }
+  if (tipo === 'golpe') {
+    // Un zas de aire y un golpe sordo.
+    burst(volumen, 0.12, 1400, 'bandpass')
+    tone(140, 70, 0.1, volumen * 0.6, 'triangle')
+    return
+  }
+  const sample = sonido(rutaDisparo(tipo))
+  if (!sample) {
+    bala(tuyo)
+    return
+  }
+  tocaSonido(sample, { ganancia: fuerza(volumen), tono: 0.94 + Math.random() * 0.12 })
 }
 
 /** La bala rebota en algo duro (el escudo de la carreta, por ejemplo). */

@@ -1,4 +1,5 @@
 import type { Estilo } from './estilos'
+import type { SonidoDeTropa } from './sfx'
 import { papelDelEstilo } from './papeles'
 import type { Papel } from './papeles'
 
@@ -35,6 +36,10 @@ export interface Personalidad {
   giroAlAtacar: boolean
   /** Avisa antes de disparar: una línea hasta el blanco o la zona donde va a caer. */
   apunta?: 'linea' | 'zona'
+  /** Cómo suena su ataque. */
+  sonido: SonidoDeTropa
+  /** Su animación de ataque (la del vaquero: los vikingos e indios ya traen la suya). */
+  ataque: string
 }
 
 const BASE: Personalidad = {
@@ -51,48 +56,50 @@ const BASE: Personalidad = {
   retroceso: 0.12,
   embestida: 0,
   giroAlAtacar: false,
+  sonido: 'revolver',
+  ataque: 'disparar-1',
 }
 
 const POR_PAPEL: Record<Papel, Partial<Personalidad>> = {
-  tirador: {},
-  rafaga: { temblorAlDisparar: 0.035, retroceso: 0.08 },
-  pesado: { apunta: 'linea', retroceso: 0.35, balanceo: 0.04 },
-  area: { apunta: 'zona', retroceso: 0.3 },
-  rebote: { balanceo: 0.12, salto: 0.05 },
-  perfora: { apunta: 'linea', retroceso: 0.28 },
-  cuerpo: { inclina: 0.25, ritmo: 1.35, embestida: 0.8, retroceso: 0 },
-  tanque: { pisoton: 0.13, balanceo: 0.16, ritmo: 0.6, retroceso: 0.05 },
-  cura: { flota: 0.25, balanceo: 0.04 },
-  apoyo: { balanceo: 0.11, salto: 0.07 },
-  trampa: { balanceo: 0.1, retroceso: 0.2 },
-  bomba: { temblor: 0.03, inclina: 0.3, ritmo: 1.6, retroceso: 0.25 },
-  sigilo: { agacha: 0.8, inclina: 0.22, balanceo: 0.03 },
-  control: { balanceo: 0.06, retroceso: 0.18 },
+  tirador: { sonido: 'revolver', ataque: 'disparar-1' },
+  rafaga: { temblorAlDisparar: 0.035, retroceso: 0.08, sonido: 'revolver', ataque: 'disparar-4' },
+  pesado: { apunta: 'linea', retroceso: 0.35, balanceo: 0.04, sonido: 'rifle', ataque: 'disparar-5' },
+  area: { apunta: 'zona', retroceso: 0.3, sonido: 'escopeta', ataque: 'disparar-2' },
+  rebote: { balanceo: 0.12, salto: 0.05, sonido: 'revolver', ataque: 'disparar-3' },
+  perfora: { apunta: 'linea', retroceso: 0.28, sonido: 'rifle', ataque: 'disparar-5' },
+  cuerpo: { inclina: 0.25, ritmo: 1.35, embestida: 0.8, retroceso: 0, sonido: 'golpe', ataque: 'golpe-1' },
+  tanque: { pisoton: 0.13, balanceo: 0.16, ritmo: 0.6, retroceso: 0.05, sonido: 'bufalo', ataque: 'disparar-2' },
+  cura: { flota: 0.25, balanceo: 0.04, sonido: 'revolver', ataque: 'disparar-2' },
+  apoyo: { balanceo: 0.11, salto: 0.07, sonido: 'revolver', ataque: 'disparar-1' },
+  trampa: { balanceo: 0.1, retroceso: 0.2, sonido: 'escopeta', ataque: 'disparar-3' },
+  bomba: { temblor: 0.03, inclina: 0.3, ritmo: 1.6, retroceso: 0.25, sonido: 'dinamita', ataque: 'disparar-2' },
+  sigilo: { agacha: 0.8, inclina: 0.22, balanceo: 0.03, sonido: 'revolver', ataque: 'disparar-3' },
+  control: { balanceo: 0.06, retroceso: 0.18, sonido: 'revolver', ataque: 'disparar-1' },
 }
 
 /** Los que tienen su manera propia (por estilo base: el vaquero, el vikingo y el indio, igual). */
 const POR_ESTILO: Record<string, Partial<Personalidad>> = {
-  bailarina: { giro: 9, salto: 0.28, inclina: 0, ritmo: 1.5, giroAlAtacar: true, embestida: 1.2, balanceo: 0.02 },
+  bailarina: { sonido: 'golpe', ataque: 'golpe-3', giro: 9, salto: 0.28, inclina: 0, ritmo: 1.5, giroAlAtacar: true, embestida: 1.2, balanceo: 0.02 },
   corredor: { inclina: 0.38, ritmo: 1.75, salto: 0.1, balanceo: 0.03 },
-  canon: { flota: 0.4, balanceo: 0.03, ritmo: 0.5, retroceso: 0.75, apunta: 'zona' },
-  minigun: { pisoton: 0.08, ritmo: 0.7, temblorAlDisparar: 0.07, retroceso: 0.04 },
-  coloso: { pisoton: 0.22, ritmo: 0.55, balanceo: 0.18, embestida: 1 },
+  canon: { sonido: 'bufalo', ataque: 'disparar-2', flota: 0.4, balanceo: 0.03, ritmo: 0.5, retroceso: 0.75, apunta: 'zona' },
+  minigun: { sonido: 'gatling', ataque: 'disparar-2', pisoton: 0.08, ritmo: 0.7, temblorAlDisparar: 0.07, retroceso: 0.04 },
+  coloso: { ataque: 'golpe-2', pisoton: 0.22, ritmo: 0.55, balanceo: 0.18, embestida: 1 },
   furia: { inclina: 0.32, temblor: 0.015, embestida: 1.1 },
-  matón: { pisoton: 0.1, inclina: 0.18, ritmo: 0.85 },
-  kamikaze: { temblor: 0.05, inclina: 0.4, ritmo: 1.9, salto: 0.06 },
-  estocada: { inclina: 0.3, embestida: 1.6, ritmo: 1.4 },
+  matón: { ataque: 'golpe-4', pisoton: 0.1, inclina: 0.18, ritmo: 0.85 },
+  kamikaze: { sonido: 'golpe', ataque: 'golpe-4', temblor: 0.05, inclina: 0.4, ritmo: 1.9, salto: 0.06 },
+  estocada: { ataque: 'golpe-5', inclina: 0.3, embestida: 1.6, ritmo: 1.4 },
   perdigones: { retroceso: 0.45 },
   escopetazo: { retroceso: 0.55 },
-  dinamitero: { salto: 0.06, retroceso: 0.3 },
+  dinamitero: { sonido: 'dinamita', salto: 0.06, retroceso: 0.3 },
   medico: { flota: 0.2 },
   sanadora: { flota: 0.32 },
   santo: { flota: 0.3, apunta: 'linea' },
   reina: { balanceo: 0.05, salto: 0, ritmo: 0.8 },
-  poker: { balanceo: 0.14 },
-  francotirador: { apunta: 'linea', agacha: 0.92 },
+  poker: { balanceo: 0.14, ataque: 'disparar-2' },
+  francotirador: { apunta: 'linea', agacha: 0.92, sonido: 'rifle', ataque: 'disparar-5' },
   legendario: { apunta: 'linea', flota: 0.15 },
   cuervo: { flota: 0.18, balanceo: 0.12 },
-  fusileria: { temblorAlDisparar: 0.05 },
+  fusileria: { sonido: 'gatling', temblorAlDisparar: 0.05 },
   lazo: { balanceo: 0.12, retroceso: 0.3 },
   emboscada: { agacha: 0.78, inclina: 0.28 },
 }

@@ -2,7 +2,7 @@ import * as M from './mates'
 import { BUILTIN_WEAPONS } from '../cards/catalog'
 import { DRAW_S, HAND_SIZE, SPECIAL_SECONDS, WEAPON_SWAP_S, qualityOf, scaledStats, usesOf } from '../cards/model'
 import type { BattleCard, CardDef, QualityId, ShotMode, WeaponCard } from '../cards/model'
-import { ajusteDeDisparos, conClima, visionDeClima } from './clima'
+import { ajusteDeDisparos, conClima } from './clima'
 import type { Clima } from './clima'
 import { congelada, pasoClima } from './sucesosClima'
 import type { Suceso, SucesoGordo } from './sucesosClima'
@@ -475,7 +475,7 @@ export type BattleEvent =
   | { type: 'cartHit'; side: Side; damage: number; hp: number; maxHp: number }
   | { type: 'cartClaimed'; side: Side }
   /** Una tropa dispara (o pega): hacia dónde, cuánto quita y si es de cerca (para pintar el tajo). */
-  | { type: 'troopShot'; side: Side; x: number; z: number; hacia?: Vec; golpe?: number; melee?: boolean }
+  | { type: 'troopShot'; side: Side; x: number; z: number; hacia?: Vec; golpe?: number; melee?: boolean; unitId?: number }
   | { type: 'spawn'; unitId: number; x: number; z: number; quality: QualityId; side: Side }
   | { type: 'unitHit'; unitId: number; x: number; z: number; side: Side; weapon: boolean; amount: number }
   | { type: 'unitDeath'; unitId: number; x: number; z: number; side: Side }
@@ -530,7 +530,7 @@ export interface Battle {
   rand: () => number
   /** En practica los fuertes no pierden vida y no se roba. */
   practice: boolean
-  /** El clima de la partida: recorta rangos y, de noche, esconde al rival. */
+  /** El clima de la partida: recorta rangos (y cambia la luz). */
   clima: Clima
   /** Lo que le suma la precision del jugador al alcance de SU arma (1 = nada). */
   alcanceArma: number
@@ -1025,14 +1025,13 @@ function clampField(at: Vec): Vec {
 }
 
 /**
- * Si el rival no ve a esa tropa: por el humo de su propio bando o porque es de noche y va lejos
- * del fuerte rival (de noche el campo se pierde a lo lejos, como con el humo).
+ * Si el rival no ve a esa tropa: por el humo de su propio bando o por su sigilo. (El clima no
+ * esconde a nadie: de noche o con tormenta se ven todos los muñecos, siempre.)
  */
 export function hiddenBySmoke(battle: Battle, unit: Unit): boolean {
   if (unit.state === 'muerto') return false
   // El sigilo: invisible para el rival hasta unos segundos despues de disparar.
   if (unit.estilo.sigilo && battle.time - unit.lastShotAt > 2.2) return true
-  if (visionDeEnemigo(battle, unit, other(unit.side)) === 'oculto') return true
   for (const smoke of battle.smokes) {
     // Una torre es una empalizada clavada en el suelo: el humo no la esconde.
     if (unit.torre) break
@@ -1042,38 +1041,13 @@ export function hiddenBySmoke(battle: Battle, unit: Unit): boolean {
   return false
 }
 
-/** Como ve `viewer` a una tropa del rival con poca visibilidad: desde su fuerte y desde cada soldado suyo (que gana vista al avanzar). */
-function visionDeEnemigo(battle: Battle, unit: Unit, viewer: Side): 'claro' | 'fantasma' | 'oculto' {
-  if (battle.clima === 'dia' || battle.clima === 'helado') return 'claro'
-  const soldados: { distancia: number; andado: number }[] = []
-  for (const mio of battle.units) {
-    if (mio.side !== viewer || !alive(mio)) continue
-    soldados.push({
-      distancia: M.hypot(unit.x - mio.x, unit.z - mio.z),
-      andado: M.hypot(mio.x - mio.spawn.x, mio.z - mio.spawn.z),
-    })
-  }
-  return visionDeClima(battle.clima, lejosDelFuerte(unit, viewer), soldados)
-}
-
-/** Lo lejos que esta una tropa del fuerte de quien mira. */
-function lejosDelFuerte(unit: Unit, viewer: Side): number {
-  const fort = fortPos(viewer)
-  return M.hypot(unit.x - fort.x, unit.z - fort.z)
-}
-
 /**
  * Como se ve una tropa desde un bando:
  *  - `claro`:   normal, se ve entera.
- *  - `fantasma`: es tuya y va tapada por tu humo (o es del rival y esta a media distancia de
- *    noche): se ve a medias.
- *  - `oculto`:  es del rival y no se ve: ni por el humo ni por la noche.
+ *  - `fantasma`: es tuya y va tapada por tu humo: se ve a medias.
+ *  - `oculto`:  es del rival y no se ve (por su humo o su sigilo).
  */
 export function smokeVisibility(battle: Battle, unit: Unit, viewer: Side): 'claro' | 'fantasma' | 'oculto' {
-  if (unit.side !== viewer && unit.state !== 'muerto') {
-    const vision = visionDeEnemigo(battle, unit, viewer)
-    if (vision !== 'claro') return vision === 'oculto' ? 'oculto' : 'fantasma'
-  }
   if (!hiddenBySmoke(battle, unit)) return 'claro'
   return unit.side === viewer ? 'fantasma' : 'oculto'
 }
@@ -1641,7 +1615,7 @@ function launchTroopShot(battle: Battle, unit: Unit) {
   }
   // La tropa dispara: la escena lo oye (ruido de bala, el tajo si es de cerca) y la animacion se
   // dispara por su cuenta.
-  battle.events.push({ type: 'troopShot', side: unit.side, x: unit.x, z: unit.z, hacia: { x: to.x, z: to.z }, golpe: shot.golpe, melee: shot.melee })
+  battle.events.push({ type: 'troopShot', side: unit.side, x: unit.x, z: unit.z, hacia: { x: to.x, z: to.z }, golpe: shot.golpe, melee: shot.melee, unitId: unit.id })
   battle.shots.push(shot)
 }
 

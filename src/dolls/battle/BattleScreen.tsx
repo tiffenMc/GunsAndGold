@@ -51,7 +51,7 @@ import type { DragState, HandView } from './HandHud'
 import { hudLayout, inside } from './layout'
 import type { HudLayout } from './layout'
 import { startMusic, stopMusic } from './music'
-import { bala, disparo, precargarBatalla, precargarDisparos, rebote, ruleta as sonarRuleta, sfx, tic } from './sfx'
+import { disparo, precargarBatalla, tiroDeTropa, precargarDisparos, rebote, ruleta as sonarRuleta, sfx, tic } from './sfx'
 import { CLIMAS, ajusteDeDisparos, climaAlAzar, climaInfo } from './clima'
 import type { Clima } from './clima'
 import { ClimaFx } from './ClimaFx'
@@ -63,8 +63,7 @@ import type { ResumenDeBatalla } from '../game/incursiones'
 import { SmokeClouds, TunnelPortals, ZapField } from './Specials'
 import { HabilidadesLayer } from './EfectosHabilidad'
 import { ChapaDeLaMano } from './Carteles'
-import { NumerosDeDano } from './Numeros'
-import type { Numero } from './Numeros'
+import { personalidadDe } from './personalidad'
 import { PantallaClima, SucesosClimaFx } from './SucesosClimaFx'
 import type { AccionRemota, Sala } from '../red/sala'
 import { aplicarFoto, espejo, tomarFoto } from '../red/foto'
@@ -622,8 +621,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   const [callout, setCallout] = useState<{ text: string; key: number } | null>(null)
   /** Los bocadillos de las cartas (pulla al salir al campo). */
   const [globos, setGlobos] = useState<Globo[]>([])
-  /** Los números de daño que faltan por pintar (los coge la capa de números al momento). */
-  const numeros = useRef<Numero[]>([])
   /** Los golpes de cerca que faltan por pintar (el tajo del color del bando). */
   const tajos = useRef<Tajo[]>([])
   /** El principio: cartel de "VS" → ruleta del clima → partida. En modo prueba se entra directo. */
@@ -913,7 +910,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     const tics = setInterval(() => tic(), 130)
     const para = setTimeout(() => {
       clearInterval(tics)
-      // El clima se le mete a la partida: recorta rangos y, de noche, esconde al rival.
+      // El clima se le mete a la partida: recorta rangos y cambia la luz.
       battle.clima = clima
       sonarRuleta(clima === 'noche' || clima === 'tormenta')
     }, 2450)
@@ -1126,7 +1123,12 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           }
           case 'troopShot':
             // Las tropas tambien disparan: suena la bala (con limite, que son muchas a la vez).
-            bala(event.side === 0)
+            {
+              // Cada tipo suena a lo suyo: revólver, rifle, escopeta, ametralladora, golpe, flecha…
+              const quien = event.unitId !== undefined ? battle.units.find((u) => u.id === event.unitId) : undefined
+              const tipo = event.melee ? 'golpe' : quien?.card.clase === 'indios' ? 'flecha' : quien ? personalidadDe(quien.estilo).sonido : 'revolver'
+              tiroDeTropa(tipo, event.side === 0)
+            }
             // El golpe de cerca no lleva bala: se pinta el tajo en el que lo recibe.
             if (event.melee && event.hacia) {
               tajos.current.push({ x: event.hacia.x, z: event.hacia.z, desdeX: event.x, desdeZ: event.z, side: event.side, golpe: event.golpe ?? 1 })
@@ -1143,8 +1145,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             } else if (event.amount >= 0.5) {
               newFx.push({ id: nextId.current++, kind: 'spark', x: event.x, z: event.z, r: 0.5 + Math.min(3, event.amount) * 0.25, color: SIDE_COLOR[pega], born: clock })
             }
-            // Lo que quita, en grande si es mucho (los seguidos al mismo muñeco se suman).
-            if (event.amount > 0) numeros.current.push({ x: event.x, z: event.z, cantidad: event.amount, side: pega, clave: `u${event.unitId}` })
             break
           }
           case 'smoke':
@@ -1201,7 +1201,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           case 'fortHit': {
             const p = fortHitPoint(event.side)
             newFx.push({ id: nextId.current++, kind: 'fort', x: p.x, z: p.z, r: 1, color: '#ffb347', born: clock })
-            numeros.current.push({ x: p.x, z: p.z, cantidad: event.damage, side: (1 - event.side) as Side, clave: `f${event.side}`, fuerte: true })
             sfx.fort()
             break
           }
@@ -1742,7 +1741,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           <Habilidades battle={battle} />
           <SucesosDelClima battle={battle} />
           <FxLayer items={fx} />
-          <NumerosDeDano cola={numeros} />
           <PopupLayer items={popups} />
           <GloboLayer items={globos} />
         </ShakeGroup>

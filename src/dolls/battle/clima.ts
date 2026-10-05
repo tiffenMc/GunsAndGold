@@ -5,8 +5,8 @@ import type { Arquetipo } from '../cards/arquetipos'
  * los rangos**, y a cada uno le toca un blanco distinto:
  *
  *  - **día**: todo normal.
- *  - **noche**: apenas se ve el campo rival (esconde sus tropas como hace el humo) y **tus disparos**
- *    pierden alcance.
+ *  - **noche**: **tus disparos** pierden alcance (el campo se ve entero: el clima nunca esconde a
+ *    nadie, solo el humo y el sigilo).
  *  - **lluvioso**: **tus disparos** pierden bastante alcance, y los tiradores selectos algo de rango.
  *  - **tormenta**: los **berserker** pierden mucho daño y bastante rango.
  *  - **helado**: los **medios** pierden rango.
@@ -52,10 +52,10 @@ export const CLIMAS: ClimaInfo[] = [
     id: 'noche',
     label: 'Noche',
     icon: '🌙',
-    nota: 'Se ve poco del campo rival: tus soldados ven más al avanzar. Tus disparos llegan menos',
+    nota: 'Oscuro: tus disparos llegan menos',
     color: '#7dd3fc',
     cielo: '#22345f',
-    ambiente: 0.62,
+    ambiente: 0.78,
     sol: 0.7,
     colorSol: '#8fa8e8',
     cae: 'nada',
@@ -65,7 +65,7 @@ export const CLIMAS: ClimaInfo[] = [
     id: 'lluvia',
     label: 'Lluvioso',
     icon: '🌧️',
-    nota: 'Llueve: se ve menos (tus soldados ven más al avanzar), tus disparos pierden alcance y los selectos, rango',
+    nota: 'Llueve: tus disparos pierden alcance y los selectos, rango',
     color: '#60a5fa',
     cielo: '#52657a',
     ambiente: 0.75,
@@ -81,7 +81,7 @@ export const CLIMAS: ClimaInfo[] = [
     nota: 'Rayos y truenos: los berserker pierden daño y rango',
     color: '#a78bfa',
     cielo: '#3a4866',
-    ambiente: 0.66,
+    ambiente: 0.8,
     sol: 0.75,
     colorSol: '#8fa8e8',
     cae: 'lluvia',
@@ -156,45 +156,3 @@ export function climaAlAzar(azar: () => number = Math.random): Clima {
   return 'helado'
 }
 
-/**
- * Lo lejos que se ve el campo rival cuando hay poca visibilidad (noche y lluvia). Desde tu fuerte se
- * ve `fuerte` metros con claridad (y 8 mas a medias). Cada soldado tuyo **va ganando vista segun se
- * aleja de donde salio**: empieza viendo `base` metros y suma `gana` por cada metro andado, hasta `tope`.
- * Asi, conforme avanzas, el campo se va abriendo y nunca te quedas a ciegas.
- */
-export interface Vista {
-  fuerte: number
-  base: number
-  gana: number
-  tope: number
-}
-
-export const VISTAS: Partial<Record<Clima, Vista>> = {
-  noche: { fuerte: 9, base: 3.5, gana: 0.55, tope: 16 },
-  lluvia: { fuerte: 13, base: 5, gana: 0.5, tope: 18 },
-  tormenta: { fuerte: 12, base: 4.5, gana: 0.5, tope: 17 },
-}
-
-/** Lo que se ve el campo del rival: `claro`, `fantasma` (a medias) u `oculto`. */
-export function visionDeClima(
-  clima: Clima,
-  /** Lo lejos que esta de tu fuerte. */
-  distanciaFuerte: number,
-  /** Tus soldados vivos: lo lejos que esta del objetivo y lo que han andado desde que salieron. */
-  soldados: { distancia: number; andado: number }[],
-): 'claro' | 'fantasma' | 'oculto' {
-  const vista = VISTAS[clima]
-  if (!vista) return 'claro'
-  // 0 = oculto, 1 = a medias, 2 = claro
-  let nivel = 0
-  const prueba = (alcance: number, distancia: number, margen: number) => {
-    if (distancia <= alcance) nivel = 2
-    else if (distancia <= alcance + margen) nivel = Math.max(nivel, 1)
-  }
-  prueba(vista.fuerte, distanciaFuerte, 8)
-  for (const soldado of soldados) {
-    prueba(Math.min(vista.tope, vista.base + vista.gana * soldado.andado), soldado.distancia, 4)
-    if (nivel === 2) break
-  }
-  return nivel === 2 ? 'claro' : nivel === 1 ? 'fantasma' : 'oculto'
-}

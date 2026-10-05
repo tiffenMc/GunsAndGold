@@ -1,15 +1,12 @@
 import { useMemo } from 'react'
 import { CanvasTexture, LinearFilter, SRGBColorSpace, Vector2 } from 'three'
-import { pintarPapel } from './papeles'
-import type { PapelInfo } from './papeles'
 
 const CENTRO = new Vector2(0.5, 0)
 
 /**
- * Sobre cada soldado, **el icono de su papel** (francotirador, área, tanque, cura…) y sus **escudos
- * en circulitos** con el color de su bando (azul los tuyos, rojo los del rival): uno por escudo,
- * lleno o vacio. Es **una sola imagen** por soldado, y es lo unico que flota encima: cuanto menos
- * adorno, mas se ve el campo. El icono es lo que dice de un vistazo qué es cada muñeco.
+ * Sobre cada soldado, sus **escudos en circulitos** con el color de su bando (azul los tuyos, rojo
+ * los del rival): uno por escudo, lleno o vacio. Es **una sola imagen** por soldado, y es lo unico
+ * que flota encima: cuanto menos adorno, mas se ve el campo.
  */
 
 const cache = new Map<string, CanvasTexture>()
@@ -17,26 +14,20 @@ const cache = new Map<string, CanvasTexture>()
 /** Lo que mide cada circulito en el dibujo (px) y en el campo (unidades del mundo). */
 const PIP = 64
 const PIP_MUNDO = 0.55
-/** El icono del papel mide esto (en circulitos) y deja este hueco hasta los escudos. */
-const ICONO = 1.9
-const HUECO = 0.12
 
-function textura(escudos: number, maximo: number, color: string, papel: PapelInfo | null): CanvasTexture {
-  const llave = `${escudos}|${maximo}|${color}|${papel?.id ?? ''}`
+function textura(escudos: number, maximo: number, color: string): CanvasTexture {
+  const llave = `${escudos}|${maximo}|${color}`
   const hecha = cache.get(llave)
   if (hecha) return hecha
   const n = Math.max(1, maximo)
   const lienzo = document.createElement('canvas')
-  const delante = papel ? PIP * (ICONO + HUECO) : 0
-  const alto = papel ? PIP * ICONO : PIP
-  lienzo.width = delante + PIP * n
-  lienzo.height = alto
+  lienzo.width = PIP * n
+  lienzo.height = PIP
   const ctx = lienzo.getContext('2d')!
-  if (papel) pintarPapel(ctx, papel, alto / 2, alto / 2, alto / 2 - 1, color)
   const r = PIP * 0.4
   for (let i = 0; i < n; i++) {
-    const cx = delante + PIP * (i + 0.5)
-    const cy = alto / 2
+    const cx = PIP * (i + 0.5)
+    const cy = PIP / 2
     // Aro oscuro para que se lea sobre cualquier suelo.
     ctx.beginPath()
     ctx.arc(cx, cy, r + PIP * 0.07, 0, Math.PI * 2)
@@ -65,28 +56,15 @@ function textura(escudos: number, maximo: number, color: string, papel: PapelInf
   return tex
 }
 
-/** El papel y la barra de escudos del soldado. `y` es la altura a la que flota. */
-export function UnitBadge({
-  escudos,
-  maximo,
-  color,
-  y,
-  papel = null,
-}: {
-  escudos: number
-  maximo: number
-  color: string
-  y: number
-  papel?: PapelInfo | null
-}) {
+/** La barra de escudos del soldado. `y` es la altura a la que flota. */
+export function UnitBadge({ escudos, maximo, color, y }: { escudos: number; maximo: number; color: string; y: number }) {
   const total = Math.min(10, Math.max(1, Math.max(maximo, escudos)))
   const llenos = Math.min(total, Math.max(0, Math.ceil(escudos)))
-  const tex = useMemo(() => textura(llenos, total, color, papel), [llenos, total, color, papel])
+  const tex = useMemo(() => textura(llenos, total, color), [llenos, total, color])
   // Un circulito por escudo; con muchos, se encogen un poco para no hacer una fila enorme.
   const pip = total > 6 ? PIP_MUNDO * (6 / total) ** 0.5 : PIP_MUNDO
-  const ancho = pip * (total + (papel ? ICONO + HUECO : 0))
   return (
-    <sprite position={[0, y, 0]} center={CENTRO} scale={[ancho, papel ? pip * ICONO : pip, 1]} renderOrder={20}>
+    <sprite position={[0, y, 0]} center={CENTRO} scale={[pip * total, pip, 1]} renderOrder={20}>
       <spriteMaterial map={tex} transparent depthTest={false} depthWrite={false} toneMapped={false} />
     </sprite>
   )
@@ -135,4 +113,3 @@ export function UnitBase({ color }: { color: string }) {
     </mesh>
   )
 }
-
