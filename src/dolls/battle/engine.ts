@@ -514,7 +514,14 @@ export interface Battle {
   bullets: Bullet[]
   forts: [Fort, Fort]
   hands: [Hand, Hand]
+  /** Todas las cartas de la partida por id (para pintarlas). Si un id está en los dos mazos, la tuya. */
   cards: Map<string, CardDef>
+  /**
+   * Las cartas de **cada bando** por id. Tu copia de una carta (con tu tipo de tirador y los extras
+   * de tus características) no es la misma que la del bot aunque se llamen igual: cada bando juega
+   * con la suya.
+   */
+  cartas: [Map<string, CardDef>, Map<string, CardDef>]
   events: BattleEvent[]
   over: { winner: Side; by: 'fuerte' | 'tiempo' } | null
   nextId: number
@@ -594,8 +601,12 @@ export interface BattleOptions {
 }
 
 export function createBattle(options: BattleOptions): Battle {
-  const cards = new Map<string, CardDef>()
-  for (const deck of options.decks) for (const card of deck) cards.set(card.id, card)
+  const cartas: [Map<string, CardDef>, Map<string, CardDef>] = [new Map(), new Map()]
+  options.decks.forEach((deck, side) => {
+    for (const card of deck) cartas[side === 0 ? 0 : 1].set(card.id, card)
+  })
+  // Para pintar: las del bot y, encima, las tuyas (si se llaman igual, se ve la tuya).
+  const cards = new Map<string, CardDef>([...cartas[1], ...cartas[0]])
   const rand = mulberry(options.seed ?? Math.floor(Math.random() * 1e9))
   const battle: Battle = {
     time: 0,
@@ -615,6 +626,7 @@ export function createBattle(options: BattleOptions): Battle {
     ],
     hands: [makeHand(options.decks[0]), makeHand(options.decks[1])],
     cards,
+    cartas,
     events: [],
     over: null,
     nextId: 1,
@@ -649,7 +661,7 @@ export function createBattle(options: BattleOptions): Battle {
       if (slot.cardId) used.push(slot.cardId)
     }
     hand.weapon.cardId = drawWeapon(battle, hand)
-    hand.weapon.uses = hand.weapon.cardId ? usesOf(battle.cards.get(hand.weapon.cardId) as WeaponCard) : 0
+    hand.weapon.uses = hand.weapon.cardId ? usesOf(cartaDelBando(battle, side, hand.weapon.cardId) as WeaponCard) : 0
   }
   return battle
 }
@@ -675,15 +687,20 @@ function drawWeapon(battle: Battle, hand: Hand): string | null {
 // Consultas para la interfaz
 // ---------------------------------------------------------------------------
 
+/** La carta de un bando por su id: la suya (y si no la tiene, la que haya en la partida). */
+export function cartaDelBando(battle: Battle, side: Side, id: string): CardDef | undefined {
+  return battle.cartas[side].get(id) ?? battle.cards.get(id)
+}
+
 export function slotCard(battle: Battle, side: Side, index: number): BattleCard | null {
   const id = battle.hands[side].slots[index]?.cardId
-  const card = id ? battle.cards.get(id) : undefined
+  const card = id ? cartaDelBando(battle, side, id) : undefined
   return card && card.kind === 'batalla' ? card : null
 }
 
 export function weaponCard(battle: Battle, side: Side): WeaponCard | null {
   const id = battle.hands[side].weapon.cardId
-  const card = id ? battle.cards.get(id) : undefined
+  const card = id ? cartaDelBando(battle, side, id) : undefined
   return card && card.kind === 'arma' ? card : null
 }
 
@@ -994,7 +1011,7 @@ export function rerollWeapon(battle: Battle, side: Side): boolean {
   const hand = battle.hands[side]
   hand.weapon.lastId = hand.weapon.cardId
   hand.weapon.cardId = drawWeapon(battle, hand)
-  hand.weapon.uses = hand.weapon.cardId ? usesOf(battle.cards.get(hand.weapon.cardId) as WeaponCard) : 0
+  hand.weapon.uses = hand.weapon.cardId ? usesOf(cartaDelBando(battle, side, hand.weapon.cardId) as WeaponCard) : 0
   hand.weapon.readyAt = 0
   return true
 }
@@ -1872,7 +1889,8 @@ function stepCampos(battle: Battle) {
 
 function stepHands(battle: Battle) {
   if (battle.practice) return
-  for (const hand of battle.hands) {
+  for (const side of [0, 1] as Side[]) {
+    const hand = battle.hands[side]
     for (const slot of hand.slots) {
       if (!slot.cardId && battle.time >= slot.readyAt) {
         // Nunca dos iguales en la mano: se evitan las que ya estan en los otros huecos.
@@ -1882,7 +1900,7 @@ function stepHands(battle: Battle) {
     }
     if (!hand.weapon.cardId && battle.time >= hand.weapon.readyAt) {
       hand.weapon.cardId = drawWeapon(battle, hand)
-      hand.weapon.uses = hand.weapon.cardId ? usesOf(battle.cards.get(hand.weapon.cardId) as WeaponCard) : 0
+      hand.weapon.uses = hand.weapon.cardId ? usesOf(cartaDelBando(battle, side, hand.weapon.cardId) as WeaponCard) : 0
     }
   }
 }

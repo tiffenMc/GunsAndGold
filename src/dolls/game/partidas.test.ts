@@ -1,3 +1,6 @@
+import { conClima } from '../battle/clima'
+import { slotCard } from '../battle/engine'
+import { Simulacion } from '../battle/simulacion'
 import { ejecutarAccion } from './acciones'
 import { mordiscoPorAbandonar, prepararPartida, terminarEncargo } from './partidas'
 import { conJugadores, createPlayer, getPlayer, switchPlayer } from './players'
@@ -60,5 +63,43 @@ describe('las acciones (lo que hace el servidor)', () => {
     const cuenta = 'local:llena'
     for (let i = 0; i < 3; i++) expect(ejecutarAccion({ tipo: 'crear', nombre: `P${i}`, avatar: '', clase: 'vaqueros' }, cuenta).id).toBeTruthy()
     expect(ejecutarAccion({ tipo: 'crear', nombre: 'P4', avatar: '', clase: 'vaqueros' }, cuenta).error).toBeTruthy()
+  })
+})
+
+describe('tus cartas y tus características en la partida', () => {
+  it('cada bando juega con su copia de la carta, aunque el bot tenga la misma', () => {
+    const p = personaje()
+    // Con las características al máximo, tus cartas pegan más que las del bot.
+    const fuerte = { ...p, caracteristicas: { ...p.caracteristicas, punteria: 100, precision: 100, vida: 100 } }
+    const prep = prepararPartida(fuerte, 21)
+    const sim = new Simulacion(prep)
+    const b = sim.battle
+    for (let slot = 0; slot < b.hands[0].slots.length; slot++) {
+      const mia = slotCard(b, 0, slot)!
+      const original = prep.mazos[0].find((c) => c.id === mia.id)!
+      // La que sale de tu mano es la tuya (con tus extras), no la del bot.
+      expect(mia).toBe(original)
+      // (Antes salía la del bot: el mismo nombre, pero su tipo de tirador y sin tus extras.)
+      const delBot = prep.mazos[1].find((c) => c.id === mia.id)
+      if (delBot) expect(slotCard(b, 0, slot)).not.toBe(delBot)
+    }
+    // Y la tropa que sacas lleva tu carta (con su ajuste del clima), no la del bot.
+    const mia = slotCard(b, 0, 0)!
+    expect(sim.jugar({ a: 'carta', slot: 0, x: 0, z: 10, precision: 1, torre: false })).toBe(true)
+    const tropa = b.units.find((u) => u.side === 0)!
+    const esperada = conClima(mia, b.clima, mia.arquetipo)
+    expect(tropa.card.id).toBe(mia.id)
+    expect(tropa.card.damage).toBe(esperada.damage)
+    expect(tropa.card.fireMs).toBe(esperada.fireMs)
+    expect(tropa.card.shields).toBe(esperada.shields)
+  })
+
+  it('la precisión alarga el arma y la vida engorda el fuerte', () => {
+    const p = personaje()
+    const normal = new Simulacion(prepararPartida({ ...p, caracteristicas: { ...p.caracteristicas, precision: 1, vida: 1 } }, 3)).battle
+    const fino = new Simulacion(prepararPartida({ ...p, caracteristicas: { ...p.caracteristicas, precision: 100, vida: 100 } }, 3)).battle
+    expect(fino.alcanceArma).toBeCloseTo(1.2, 5)
+    expect(fino.alcanceArma).toBeGreaterThan(normal.alcanceArma)
+    expect(fino.forts[0].maxHp).toBeGreaterThan(normal.forts[0].maxHp)
   })
 })

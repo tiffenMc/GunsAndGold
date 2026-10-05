@@ -22,6 +22,7 @@ import {
   FIELD_W,
   FIRE_LINE,
   SMOKE_R,
+  cartaDelBando,
   clampDeploy,
   clampFireLine,
   puedeSacar,
@@ -626,6 +627,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     battle.hands[0].weapon.cardId = arma.id
     battle.hands[0].weapon.uses = 9999
     battle.cards.set(arma.id, arma)
+    battle.cartas[0].set(arma.id, arma)
 
     const ponerDianas = () => {
       if (!soldado) return
@@ -1060,7 +1062,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           }
           case 'weaponFired': {
             // El fogonazo, el humo y las vainas son del arma que ha disparado: cada una tiene el suyo.
-            const fired = battle.cards.get(event.weaponId)
+            const fired = cartaDelBando(battle, event.side, event.weaponId)
             const weapon = fired && fired.kind === 'arma' ? fired : null
             const mode: ShotMode = weapon?.shot.mode ?? 'bala'
             const profile = muzzleProfile(mode)
@@ -1577,12 +1579,12 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
 
   const handView: HandView = {
     slots: snap.slots.map((slot, i) => ({
-      card: slot.cardId ? battle.cards.get(slot.cardId) ?? null : null,
+      card: slot.cardId ? cartaDelBando(battle, 0, slot.cardId) ?? null : null,
       drawKey: drawKeys.slots[i] ?? 0,
       dimmed: snap.vivos >= snap.maxVivos,
     })),
     weapon: {
-      card: snap.weapon.cardId ? battle.cards.get(snap.weapon.cardId) ?? null : null,
+      card: snap.weapon.cardId ? cartaDelBando(battle, 0, snap.weapon.cardId) ?? null : null,
       drawKey: drawKeys.weapon,
       ready: snap.weapon.uses > 0,
     },
@@ -1597,7 +1599,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   const padSize = Math.max(120, Math.min(230, size.w * 0.6, size.h - layout.handTop - 40))
   const over = battle.over
   // El arma montada en tu raya: la carta que llevas en la mano es la que dispara.
-  const weaponView = snap.weapon.cardId ? battle.cards.get(snap.weapon.cardId) : null
+  const weaponView = snap.weapon.cardId ? cartaDelBando(battle, 0, snap.weapon.cardId) : null
   const weaponModel = weaponView && weaponView.kind === 'arma' ? weaponView.model : null
   const weaponAccent = weaponView?.accent ?? '#fbbf24'
   // El alcance que se enseña al apuntar es el de verdad: con el clima y tu precision ya aplicados.
@@ -1608,7 +1610,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   const weaponUses = weaponView && weaponView.kind === 'arma' ? usesOf(weaponView) : WEAPON_USES
   const special = weaponView && weaponView.kind === 'arma' ? weaponView.special : undefined
   // El arma del rival, para verla en su casa.
-  const foeView = snap.foe.cardId ? battle.cards.get(snap.foe.cardId) : null
+  const foeView = snap.foe.cardId ? cartaDelBando(battle, 1, snap.foe.cardId) : null
   const foeModel = foeView && foeView.kind === 'arma' ? foeView.model : null
   const foeAccent = foeView?.accent ?? '#ef4444'
 
