@@ -14,15 +14,17 @@ import { SIDE_COLOR } from './Field'
 import { estiloDe, propDe } from './estilos'
 import { rarityInfo, rarityOf } from '../cards/model'
 import { AuraRareza } from './Effects'
-import { EtiquetaNombre, UnitBadge, UnitBase } from './UnitBadge'
+import { UnitBadge, UnitBase } from './UnitBadge'
 import { papelDe } from './papeles'
+import { personalidadDe } from './personalidad'
+import type { Personalidad } from './personalidad'
 import { EstadosUnidad, aplicarPose } from './PosesHabilidad'
 
 type Act = 'mover' | 'quieto' | 'disparar' | 'impacto' | 'caer' | 'morir' | 'roto'
 
 const QUIETO = motionById('quieto')
 /** Los muñecos del campo van algo mas grandes que a escala: asi tienen presencia. */
-export const UNIT_SCALE = 2.45
+export const UNIT_SCALE = 2.15
 
 /** Los colores del bando en el muñeco: azul los tuyos, rojo los del rival (bien vivos, que se vean de lejos). */
 const TEAM_COLOR: Record<Side, string> = { 0: '#2f9bff', 1: '#ff3b30' }
@@ -56,6 +58,52 @@ function fantasmaDe(material: Material): Material {
   return copia
 }
 
+interface Manera {
+  fase: number
+  /** Segundos desde su último ataque. */
+  ataque: number
+  giro: number
+  tiros: number
+}
+
+/**
+ * Mueve el muñeco **a su manera**, por encima de su animación: los saltitos y el giro de la
+ * bailarina, los pisotones del tanque, la inclinación del que corre, el temblor del kamikaze, el
+ * retroceso del cañonazo o la embestida del de cuerpo a cuerpo al pegar.
+ */
+function moverseASuManera(g: Group, m: Manera, per: Personalidad, unit: Unit, act: Act, pace: Pace, dt: number, escala: number) {
+  // (Va dentro del muñeco ya agrandado: los metros se pasan a su tamaño.)
+  const metro = 1 / escala
+  if (unit.shotCount !== m.tiros) {
+    m.tiros = unit.shotCount
+    m.ataque = 0
+  }
+  m.ataque += dt
+  const anda = act === 'mover'
+  const dispara = unit.state === 'fuego'
+  m.fase += dt * (anda ? 6.5 * per.ritmo * Math.max(0.7, unit.card.speed) * pace.anim : 1.6)
+  const paso = Math.sin(m.fase)
+  const ATAQUE_S = 0.38
+  const k = m.ataque < ATAQUE_S ? m.ataque / ATAQUE_S : 1
+  const golpe = 1 - k
+  const pico = Math.sin(k * Math.PI)
+  const flota = per.flota ? per.flota * (0.75 + 0.25 * Math.sin(m.fase * 0.45)) : 0
+  g.position.y = (flota + (anda ? per.salto * Math.abs(paso) : 0)) * metro
+  // Delante es +z: el tiro le echa para atrás; el golpe de cerca le lanza hacia delante.
+  g.position.z = (-per.retroceso * golpe * golpe + per.embestida * pico) * metro
+  const temblor = per.temblor + (dispara ? per.temblorAlDisparar : 0)
+  g.position.x = temblor ? (Math.random() - 0.5) * 2 * temblor * metro : 0
+  g.rotation.z = (anda ? 1 : 0.3) * per.balanceo * paso
+  g.rotation.x = per.inclina * (anda ? 1 : 0.4)
+  if (per.giro && anda) m.giro += dt * per.giro
+  if (per.giroAlAtacar && m.ataque < ATAQUE_S * 1.3) m.giro += dt * 17
+  else if (!anda) m.giro -= wrapAngle(m.giro) * Math.min(1, dt * 7)
+  g.rotation.y = m.giro
+  // En cada paso se aplasta un poco (y se ensancha): pisa fuerte.
+  const pisa = anda && per.pisoton ? per.pisoton * Math.max(0, -Math.cos(m.fase * 2)) : 0
+  g.scale.set(1 + pisa * 0.6, per.agacha * (1 - pisa), 1 + pisa * 0.6)
+}
+
 function wrapAngle(a: number): number {
   let x = a
   while (x > Math.PI) x -= Math.PI * 2
@@ -78,6 +126,9 @@ export function FieldUnit({
 }) {
   const group = useRef<Group>(null)
   const body = useRef<Group>(null)
+  /** Su manera de andar y de pegar (ver `personalidad.ts`): lo que hace que se le reconozca. */
+  const andares = useRef<Group>(null)
+  const manera = useRef({ fase: Math.random() * 6, ataque: 9, giro: 0, tiros: unit.shotCount })
   /** Lo que hace el cuerpo con la habilidad: bailar, girar, hacerse bola, saltar, marearse… */
   const poseRef = useRef<Group>(null)
   const [act, setAct] = useState<Act>('mover')
@@ -155,6 +206,7 @@ export function FieldUnit({
     }
 
     if (poseRef.current && g) aplicarPose(battle, unit, poseRef.current, g)
+    if (andares.current) moverseASuManera(andares.current, manera.current, personalidadDe(unit.estilo), unit, actRef.current, paceRef.current, dt, UNIT_SCALE * tam)
     const current = actRef.current
     if (unit.state === 'muerto') {
       if (current !== 'morir' && current !== 'roto') setAct('morir')
@@ -246,6 +298,7 @@ export function FieldUnit({
       ) : (
         <group scale={UNIT_SCALE * tam} position={[0, torre ? 0.93 : 0, 0]}>
           <group ref={poseRef}>
+          <group ref={andares}>
           <group ref={body}>
             <DollBody
               look={look}
@@ -256,6 +309,7 @@ export function FieldUnit({
               speed={speed}
               onDone={handleDone}
             />
+          </group>
           </group>
           </group>
         </group>
@@ -274,9 +328,7 @@ export function FieldUnit({
           y={height * UNIT_SCALE * tam + 0.45 + (torre ? 0.93 : 0)}
         />
       )}
-      {act !== 'roto' && act !== 'morir' && (
-        <EtiquetaNombre nombre={card.name} papel={papel} color={color} y={height * UNIT_SCALE * tam + 1.6 + (torre ? 0.93 : 0)} />
-      )}
+
     </group>
   )
 }

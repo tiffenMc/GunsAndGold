@@ -40,7 +40,7 @@ import {
   weaponCard,
 } from './engine'
 import type { Battle, BattleEvent, Pace, Side, Unit, Vec } from './engine'
-import { FX_MAX_LIFE, FxLayer, GroundMark, RangoTorre, Ribbon, Tajos, TroopShots, WeaponBullets, fortHitPoint } from './Effects'
+import { FX_MAX_LIFE, FxLayer, GroundMark, Punterias, RangoTorre, Ribbon, Tajos, TroopShots, WeaponBullets, fortHitPoint } from './Effects'
 import type { Tajo } from './Effects'
 import type { RangoData } from './Effects'
 import type { Fx, RibbonData } from './Effects'
@@ -56,14 +56,13 @@ import { CLIMAS, ajusteDeDisparos, climaAlAzar, climaInfo } from './clima'
 import type { Clima } from './clima'
 import { ClimaFx } from './ClimaFx'
 import { CalentarMateriales } from './calentar'
-import { nombreDeRival, pullaDe } from './taunts'
+import { nombreDeRival } from './taunts'
 import { precargarVoces } from './voices'
 import { usePlayer } from '../game/players'
 import type { ResumenDeBatalla } from '../game/incursiones'
 import { SmokeClouds, TunnelPortals, ZapField } from './Specials'
 import { HabilidadesLayer } from './EfectosHabilidad'
-import { CartelDeCarta, ChapaDeLaMano } from './Carteles'
-import type { Anuncio } from './Carteles'
+import { ChapaDeLaMano } from './Carteles'
 import { NumerosDeDano } from './Numeros'
 import type { Numero } from './Numeros'
 import { PantallaClima, SucesosClimaFx } from './SucesosClimaFx'
@@ -375,6 +374,7 @@ const Tiros = memo(TroopShots)
 const Balas = memo(WeaponBullets)
 const Habilidades = memo(HabilidadesLayer)
 const SucesosDelClima = memo(SucesosClimaFx)
+const Avisos = memo(Punterias)
 
 /** Mientras arrastras una carta, su chapa no se queda colgada en el hueco. */
 function seEstaArrastrando(view: HandView, slot: number): boolean {
@@ -622,8 +622,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   const [callout, setCallout] = useState<{ text: string; key: number } | null>(null)
   /** Los bocadillos de las cartas (pulla al salir al campo). */
   const [globos, setGlobos] = useState<Globo[]>([])
-  /** La última carta que ha sacado cada bando (el cartel de arriba y el de abajo). */
-  const [anuncios, setAnuncios] = useState<[Anuncio | null, Anuncio | null]>([null, null])
   /** Los números de daño que faltan por pintar (los coge la capa de números al momento). */
   const numeros = useRef<Numero[]>([])
   /** Los golpes de cerca que faltan por pintar (el tajo del color del bando). */
@@ -885,20 +883,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     return () => observer.disconnect()
   }, [])
 
-  // Cada cartel de carta se va solo a los pocos segundos (si sale otra del mismo bando, la cambia).
-  const anuncioMio = anuncios[0]?.key
-  const anuncioRival = anuncios[1]?.key
-  useEffect(() => {
-    if (anuncioMio === undefined) return
-    const id = setTimeout(() => setAnuncios((a) => (a[0]?.key === anuncioMio ? [null, a[1]] : a)), 2800)
-    return () => clearTimeout(id)
-  }, [anuncioMio])
-  useEffect(() => {
-    if (anuncioRival === undefined) return
-    const id = setTimeout(() => setAnuncios((a) => (a[1]?.key === anuncioRival ? [a[0], null] : a)), 3200)
-    return () => clearTimeout(id)
-  }, [anuncioRival])
-
   useEffect(() => {
     if (!callout) return
     const id = setTimeout(() => setCallout(null), 1700)
@@ -1001,7 +985,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
       const newFx: Fx[] = []
       const newPopups: Popup[] = []
       const newGlobos: Globo[] = []
-      const nuevosAnuncios: (Anuncio | null)[] = [null, null]
       const now = performance.now() / 1000
       for (const event of events) {
         switch (event.type) {
@@ -1039,32 +1022,14 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             sfx.blast()
             break
           case 'habilidad': {
-            // Grita el nombre de su habilidad en un bocadillo (y el campo se sacude un poco).
-            newGlobos.push({ id: nextId.current++, x: event.x, z: event.z, texto: event.nombre, side: event.side, born: performance.now() / 1000 })
-            shake.current = Math.max(shake.current, 0.35)
+            // (Sin bocadillo: la habilidad se ve en el muñeco. Solo un golpe de cámara.)
+            shake.current = Math.max(shake.current, 0.25)
             break
           }
           case 'spawn': {
-            // Cada carta tiene su frase al entrar al campo y suelta una pulla en un bocadillo.
+            // Cada carta tiene su frase al entrar al campo.
             const unit = battle.units.find((item) => item.id === event.unitId)
-            if (unit) {
-              // El cartel de la carta que acaba de salir: quién es y para qué sirve.
-              nuevosAnuncios[event.side] = { card: unit.card, side: event.side, key: nextId.current++ }
-              sfx.carta(unit.card.id, event.quality, event.side === 0)
-              // Solo las cartas grandes sueltan su pulla: asi el campo no se llena de bocadillos.
-              const grande = rarityOf(unit.card) === 'epica' || rarityOf(unit.card) === 'divina'
-              const pulla = grande ? pullaDe(unit.card.id) : null
-              if (pulla) {
-                newGlobos.push({
-                  id: nextId.current++,
-                  x: event.x,
-                  z: event.z,
-                  texto: pulla,
-                  side: event.side,
-                  born: performance.now() / 1000,
-                })
-              }
-            }
+            if (unit) sfx.carta(unit.card.id, event.quality, event.side === 0)
             newFx.push({ id: nextId.current++, kind: 'dust', x: event.x, z: event.z, r: 1, color: '', born: clock })
             {
               // Las cartas con rareza entran con efecto: pilar de luz, ondas, chispas, destello y golpe de camara.
@@ -1078,7 +1043,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
                   kind: 'invocacion',
                   x: event.x,
                   z: event.z,
-                  r: grande ? 2.2 : medio ? 1.5 : 0.8,
+                  r: grande ? 1.3 : medio ? 1 : 0.7,
                   color,
                   born: clock,
                 })
@@ -1184,7 +1149,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           }
           case 'smoke':
             sfx.carta('humo')
-            setCallout({ text: event.side === 0 ? '¡HUMO!' : '¡HUMO ENEMIGO!', key: nextId.current++ })
             break
           case 'zap': {
             sfx.carta('rayo')
@@ -1216,7 +1180,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           }
           case 'tunnel':
             sfx.carta('tunel')
-            setCallout({ text: event.side === 0 ? '¡TÚNEL ABIERTO!' : '¡TÚNEL ENEMIGO!', key: nextId.current++ })
             for (const at of [event.entry, event.exit]) {
               newFx.push({ id: nextId.current++, kind: 'warp', x: at.x, z: at.z, r: 1, color: '#f472b6', born: clock })
             }
@@ -1234,9 +1197,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             newFx.push({ id: nextId.current++, kind: 'dust', x: event.x, z: event.z, r: 1, color: '', born: clock })
             shake.current = Math.max(shake.current, 0.4)
             sfx.kill()
-            if (event.side === 1) {
-              newPopups.push({ id: nextId.current++, x: event.x, z: event.z, text: '💥', color: '#fde68a', big: true, born: now })
-            }
             break
           case 'fortHit': {
             const p = fortHitPoint(event.side)
@@ -1286,10 +1246,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             break
           }
           case 'pace':
-            setCallout({
-              text: event.pace.gait === 'correr' && event.pace.index === 3 ? '¡A correr!' : '¡Más rápido!',
-              key: nextId.current++,
-            })
+            // (Sin cartel: el ritmo ya se lee arriba, junto al reloj.)
             break
           case 'over':
             setPending(null)
@@ -1334,9 +1291,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
       if (newPopups.length > 0) setPopups((list) => [...list, ...newPopups].slice(-12))
       // Como mucho dos bocadillos a la vez, para que no se tapen unos a otros (ni al campo).
       if (newGlobos.length > 0) setGlobos((list) => [...list, ...newGlobos].slice(-2))
-      if (nuevosAnuncios[0] || nuevosAnuncios[1]) {
-        setAnuncios((antes) => [nuevosAnuncios[0] ?? antes[0], nuevosAnuncios[1] ?? antes[1]])
-      }
     },
     [],
   )
@@ -1774,6 +1728,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           <Tiros battle={battle} />
           <Balas battle={battle} />
           <Tajos cola={tajos} />
+          <Avisos battle={battle} />
           <GroundMark data={mark} />
           <RangoTorre data={rango} />
           {/* Las dos bocas del tunel mientras lo colocas. */}
@@ -1971,11 +1926,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
               </div>
             ) : null,
           )}
-          <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ top: layout.handTop - 26 }}>
-            <span className="rounded-full border border-slate-300/50 bg-slate-900/90 px-3 py-1 text-[13px] font-bold uppercase tracking-wide text-slate-100">
-              <Icono nombre="candado" /> {snap.vivos}/{snap.maxVivos} soldados · espera a que caiga uno para sacar otra carta
-            </span>
-          </div>
         </>
       )}
 
@@ -2114,9 +2064,6 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
 
       {fase === 'listo' && <PantallaClima battle={battle} />}
 
-      {/* ---------- La carta que acaba de sacar cada uno: quién es y para qué sirve ---------- */}
-      {anuncios[1] && !over && <CartelDeCarta anuncio={anuncios[1]} top={snap.cart ? 112 : 62} />}
-      {anuncios[0] && !over && <CartelDeCarta anuncio={anuncios[0]} top={layout.handTop - 150} />}
       {/* ---------- El papel de cada carta de la mano: por qué sacarla ---------- */}
       {fase === 'listo' &&
         !over &&

@@ -752,11 +752,13 @@ export function OesteApp() {
   /** Lo que se está jugando ahora mismo (partida libre, entreno o incursión). */
   const [mision, setMision] = useState<Mision>({ tipo: 'libre' })
   /** Al salir de la batalla se vuelve a donde se fue a jugar. */
+  // (Se sigue en el mundo en el que estabas: los sitios del desierto se abren desde el pueblo con
+  // los atajos, sin viajar.)
   const salirDeLaPartida = () => {
-    if (mision.tipo === 'libre') abrir('pueblo', null)
-    else if (mision.tipo === 'rango') abrir('desierto', null)
-    else if (mision.tipo === 'entreno') abrir('desierto', 'entrenar')
-    else abrir('desierto', 'incursiones')
+    if (mision.tipo === 'libre') abrir(lugar, null)
+    else if (mision.tipo === 'rango') abrir(lugar, null)
+    else if (mision.tipo === 'entreno') abrir(lugar, 'entrenar')
+    else abrir(lugar, 'incursiones')
     setMision({ tipo: 'libre' })
   }
   /** El billete de la partida que se está jugando (con su semilla: lo que cuesta irse sale de ahí). */
@@ -847,7 +849,7 @@ export function OesteApp() {
                 }
               >
                 <Mundo lugar={lugar} pausado={zona !== null || viaje !== null || ajustes} onEntrar={entrar}>
-                  <BarraDeArriba lugar={lugar} onSobres={() => setSobres(true)} onAjustes={() => setAjustes(true)} onFicha={() => abrir('pueblo', 'tablon')} onIr={(donde, sitio) => abrir(donde, sitio)} />
+                  <BarraDeArriba lugar={lugar} onSobres={() => setSobres(true)} onAjustes={() => setAjustes(true)} onFicha={() => abrir('pueblo', 'tablon')} onIr={(_, sitio) => setZona(sitio)} />
                 </Mundo>
               </SafeCanvas>
             )}
@@ -862,7 +864,7 @@ export function OesteApp() {
                 onPrizeSeen={() => setPrize(null)}
               />
             )}
-            {screen === 'mundo' && zona === 'ranking' && <BuscadosPanel onSalir={salirALaCalle} onJugar={() => abrir('desierto', 'rango')} />}
+            {screen === 'mundo' && zona === 'ranking' && <BuscadosPanel onSalir={salirALaCalle} onJugar={() => setZona('rango')} />}
             {screen === 'mundo' && zona === 'sastreria' && <SastreriaPanel onSalir={salirALaCalle} />}
             {screen === 'mundo' && zona === 'bar' && <BarPanel pestana={pestanaBar} onPestana={setPestanaBar} onSalir={salirALaCalle} />}
             {screen === 'mundo' && zona === 'saloon' && (

@@ -31,6 +31,8 @@ const POOL = 22
 /** Lo que dura un número (s) y lo que tarda en sumar los golpes seguidos. */
 const VIDA = 1
 const SUMA = 0.35
+/** Lo mínimo que tiene que quitar un número para salir (los golpecitos se van juntando). */
+const MINIMO = 0.5
 const COLOR: Record<Side, string> = { 0: '#5ec8ff', 1: '#ff6b6b' }
 
 /** Escudos con una coma como mucho ("-0,5", "-2"); la vida del fuerte, entera. */
@@ -117,7 +119,10 @@ export function NumerosDeDano({ cola }: { cola: MutableRefObject<Numero[]> }) {
   const huecos = useRef<Hueco[]>(
     Array.from({ length: POOL }, () => ({ activo: false, edad: 0, cantidad: 0, side: 0 as Side, fuerte: false, x: 0, z: 0, aspecto: 1 })),
   )
+  const sueltos = useRef(new Map<string, { cantidad: number; t: number }>())
+  const reloj = useRef(0)
   useFrame((_, dt) => {
+    reloj.current += dt
     const lista = huecos.current
     const pintar = (i: number) => {
       const h = lista[i]!
@@ -140,6 +145,18 @@ export function NumerosDeDano({ cola }: { cola: MutableRefObject<Numero[]> }) {
         h.edad = Math.min(h.edad, 0.12)
         pintar(igual)
         continue
+      }
+      // Los golpecitos (la minigun, el gas…) se juntan antes de salir: un número por cada medio
+      // escudo, no una lluvia de cifras.
+      if (!n.fuerte && n.clave !== undefined) {
+        const antes = sueltos.current.get(n.clave)
+        const suma = (antes && reloj.current - antes.t < 0.8 ? antes.cantidad : 0) + n.cantidad
+        if (suma < MINIMO) {
+          sueltos.current.set(n.clave, { cantidad: suma, t: antes && reloj.current - antes.t < 0.8 ? antes.t : reloj.current })
+          continue
+        }
+        sueltos.current.delete(n.clave)
+        n.cantidad = suma
       }
       let i = lista.findIndex((h) => !h.activo)
       if (i < 0) {
