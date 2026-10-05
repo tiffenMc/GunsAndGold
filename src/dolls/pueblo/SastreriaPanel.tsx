@@ -17,17 +17,8 @@ import {
 import type { DollLook, EyeStyle, Extra, HairStyle, MouthStyle, MustacheStyle, SliderDef } from '../dollParams'
 import { movimientoDeDibujo, problemaDelDibujo, repartir } from '../game/animacionDibujada'
 import type { AnimacionDibujada, Punto } from '../game/animacionDibujada'
-import {
-  animacionDe,
-  borrarAnimacion,
-  comprar,
-  guardarAnimacion,
-  loTienes,
-  pintaDe,
-  ponerAnimacion,
-  ponerPinta,
-  usePlayer,
-} from '../game/players'
+import { hacer } from '../game/hacer'
+import { animacionDe, loTienes, pintaDe, usePlayer } from '../game/players'
 import type { Player } from '../game/players'
 import { ARTICULOS, COLORES, MAX_ANIMACIONES, PARTES_DE_COLOR, PRECIO_ANIMACION, articulo, loQueFalta } from '../game/tienda'
 import type { Articulo, CampoDeColor, Precio, Seccion } from '../game/tienda'
@@ -265,13 +256,14 @@ function PestanaAnimacion({
             className="boton text-[13px]"
             disabled={Boolean(problema)}
             onClick={() => {
-              const fallo = guardarAnimacion(nombre, puntos)
-              setAviso(fallo ?? '¡Guardada y puesta!')
-              if (!fallo) {
-                setPuntos([])
-                setNombre('')
-                onVer(null)
-              }
+              void hacer({ tipo: 'guardarAnimacion', nombre, puntos: repartir(puntos, 64) }).then(({ error }) => {
+                setAviso(error ?? '¡Guardada y puesta!')
+                if (!error) {
+                  setPuntos([])
+                  setNombre('')
+                  onVer(null)
+                }
+              })
             }}
           >
             Guardar · <PrecioChapa precio={PRECIO_ANIMACION} />
@@ -284,15 +276,15 @@ function PestanaAnimacion({
       </div>
       <Grupo titulo={`Tus animaciones (${player.animaciones.length}/${MAX_ANIMACIONES})`}>
         <div className="grid gap-1.5">
-          <FilaDeAnimacion nombre="La de siempre" puesta={!puesta} onPoner={() => ponerAnimacion(null)} onVer={() => onVer(null)} />
+          <FilaDeAnimacion nombre="La de siempre" puesta={!puesta} onPoner={() => void hacer({ tipo: 'ponerAnimacion', id: null })} onVer={() => onVer(null)} />
           {player.animaciones.map((a) => (
             <FilaDeAnimacion
               key={a.id}
               nombre={a.nombre}
               puesta={puesta?.id === a.id}
-              onPoner={() => ponerAnimacion(a.id)}
+              onPoner={() => void hacer({ tipo: 'ponerAnimacion', id: a.id })}
               onVer={() => onVer(a)}
-              onBorrar={() => borrarAnimacion(a.id)}
+              onBorrar={() => void hacer({ tipo: 'borrarAnimacion', id: a.id })}
             />
           ))}
         </div>
@@ -346,16 +338,14 @@ export function SastreriaPanel({ onSalir }: { onSalir: () => void }) {
   const alcanza = player.admin || (player.lingotes >= total.lingotes && player.diamantes >= total.diamantes)
   const guardada = JSON.stringify(pintaDe(player)) === JSON.stringify(prueba)
 
-  const guardar = () => {
-    for (const id of falta) {
-      const fallo = comprar(id)
-      if (fallo) {
-        setAviso(fallo)
-        return
-      }
-    }
-    const fallo = ponerPinta(prueba)
-    setAviso(fallo ?? '¡Hecho! Así irás por el pueblo.')
+  /** Mientras el servidor cobra y te viste (unas décimas). */
+  const [yendo, setYendo] = useState(false)
+  const guardar = async () => {
+    setYendo(true)
+    // Compra lo que falte y te lo pone, todo de una vez (lo hace el servidor).
+    const { error } = await hacer({ tipo: 'vestir', look: prueba })
+    setYendo(false)
+    setAviso(error ?? '¡Hecho! Así irás por el pueblo.')
   }
 
   const mostrar = viendo ? viendo.animacion ?? animacionDe(player) : null
@@ -549,7 +539,7 @@ export function SastreriaPanel({ onSalir }: { onSalir: () => void }) {
                   Te falta comprar: <b>{falta.map((id) => articulo(id)?.nombre).join(', ')}</b>
                 </p>
               )}
-              <button type="button" className="boton w-full text-[14px]" disabled={guardada || !alcanza} onClick={guardar}>
+              <button type="button" className="boton w-full text-[14px]" disabled={guardada || !alcanza || yendo} onClick={() => void guardar()}>
                 {guardada ? (
                   'Así vas vestido'
                 ) : falta.length === 0 ? (

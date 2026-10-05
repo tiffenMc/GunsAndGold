@@ -11,7 +11,8 @@ import { patternById } from '../cards/patterns'
 import { SafeCanvas } from '../SafeCanvas'
 import { capturePointer } from '../debugClock'
 import { sfx, tic } from '../battle/sfx'
-import { abrirSobre, arquetipoDe, getPlayer, progresoDe, sobresPendientes, usePlayer } from '../game/players'
+import { arquetipoDe, getPlayer, progresoDe, sobresPendientes, usePlayer } from '../game/players'
+import { hacer } from '../game/hacer'
 import { progresoDeCarta } from '../game/progreso'
 
 /**
@@ -88,15 +89,28 @@ export function SobreScreen({ onCerrar }: { onCerrar: () => void }) {
   const [ficha, setFicha] = useState<Salida | null>(null)
   const contador = useRef(1)
 
-  /** Abre `cuantos` sobres seguidos. Con uno, se revelan de una en una; con varios, al resumen. */
-  const abrir = (cuantos: number) => {
+  /** Mientras el servidor abre el sobre (unas décimas): no se abre otro a la vez. */
+  const abriendo = useRef(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  /**
+   * Abre `cuantos` sobres seguidos (lo que sale lo decide el servidor, si lo hay). Con uno, se
+   * revelan de una en una; con varios, al resumen.
+   */
+  const abrir = async (cuantos: number) => {
+    if (abriendo.current) return
+    abriendo.current = true
+    setAviso(null)
+    const catalogo = new Map(todasLasCartasDelJuego().map((card) => [card.id, card]))
     const nuevas: Salida[] = []
     for (let i = 0; i < cuantos; i++) {
       // Lo que llevabas de las cartas del sobre ANTES de abrirlo: asi se sabe cuales son nuevas.
       const antes = getPlayer()
       const registro: Record<string, number> = {}
       for (const id of antes.sobres[0] ?? []) registro[id] = progresoDe(antes, id)
-      const cartas = abrirSobre()
+      const hecho = await hacer({ tipo: 'abrirSobre' })
+      if (hecho.error && i === 0) setAviso(hecho.error)
+      const cartas = (hecho.cartas ?? []).map((id) => catalogo.get(id)).filter((card): card is CardDef => Boolean(card))
       if (cartas.length === 0) break
       const vistas = new Set<string>()
       for (const card of cartas) {
@@ -109,13 +123,19 @@ export function SobreScreen({ onCerrar }: { onCerrar: () => void }) {
         vistas.add(card.id)
       }
     }
+    abriendo.current = false
     if (nuevas.length === 0) return
     setFase(cuantos === 1 ? 'revelar' : 'resumen')
     setSalieron(nuevas)
   }
 
   if (!salieron) {
-    return <SobreAbrir quedan={quedan} brillo={mejorDelSobre(player.sobres[0])} onAbrir={abrir} onCerrar={onCerrar} />
+    return (
+      <>
+        <SobreAbrir quedan={quedan} brillo={mejorDelSobre(player.sobres[0])} onAbrir={(n) => void abrir(n)} onCerrar={onCerrar} />
+        {aviso && <p className="absolute inset-x-4 bottom-6 z-30 rounded-xl bg-black/80 p-3 text-center text-[14px] font-bold text-rose-200">{aviso}</p>}
+      </>
+    )
   }
 
   if (fase === 'revelar') {

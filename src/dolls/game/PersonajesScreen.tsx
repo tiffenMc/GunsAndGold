@@ -3,7 +3,9 @@ import { todasLasCartasDelJuego } from '../cards/store'
 import type { ClaseId } from '../cards/model'
 import { MAX_PERSONAJES, claseDisponible, claseInfo, cartasDeClase } from './clases'
 import { EleccionDeClase } from './EleccionDeClase'
-import { createPlayer, deletePlayer, levelOf, switchPlayer, unlockAll, updatePlayer, usePlayers } from './players'
+import { levelOf, switchPlayer, unlockAll, updatePlayer, usePlayers } from './players'
+import { hacer } from './hacer'
+import { conexionActual } from '../auth/sincronizar'
 import type { Player } from './players'
 import { BorrarPersonaje } from './BorrarPersonaje'
 
@@ -47,24 +49,27 @@ export function PersonajesScreen({
     if (!claseDisponible(cartas, clase)) return setAviso('Esa clase aún no está lista')
     if (mios.length >= MAX_PERSONAJES) return setAviso(`Solo puedes tener ${MAX_PERSONAJES} personajes`)
     const retrato = cartasDeClase(cartas, clase).find((card) => card.kind === 'batalla')?.id ?? ''
-    const nuevo = createPlayer(limpio, retrato, clase, cuentaId)
-    // La cuenta "admin" lo tiene todo desde el principio, de cualquier clase.
-    if (nombreCuenta.trim().toLowerCase() === 'admin') {
-      unlockAll()
-      updatePlayer({ admin: true, clase: 'todas', sobres: [] })
-    }
-    switchPlayer(nuevo.id)
-    onElegido(true)
+    // Lo crea el servidor (con sus sobres de inicio), si lo hay.
+    void hacer({ tipo: 'crear', nombre: limpio, avatar: retrato, clase }, cuentaId).then(({ id, error }) => {
+      if (!id) return setAviso(error ?? 'No se ha podido crear')
+      switchPlayer(id)
+      // La cuenta "admin" lo tiene todo desde el principio, de cualquier clase (solo sin servidor:
+      // en el servidor ese usuario no existe).
+      if (!conexionActual() && nombreCuenta.trim().toLowerCase() === 'admin') {
+        unlockAll()
+        updatePlayer({ admin: true, clase: 'todas', sobres: [] })
+      }
+      onElegido(true)
+    })
   }
 
   const borrar = (player: Player) => {
-    const problema = deletePlayer(player.id)
     setABorrar(null)
-    if (problema) setAviso(problema)
-    else {
+    void hacer({ tipo: 'borrar', id: player.id }).then(({ error }) => {
+      if (error) setAviso(error)
       // Al borrar, el motor deja puesto otro jugador: se vuelve a la lista de esta cuenta.
-      setModo(mios.length <= 1 ? 'crear' : 'lista')
-    }
+      else setModo(mios.length <= 1 ? 'crear' : 'lista')
+    })
   }
 
   // Crear un personaje: la escena de elegir bando, a pantalla completa.

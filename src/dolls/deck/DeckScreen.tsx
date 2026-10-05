@@ -5,17 +5,14 @@ import { useGameCards } from '../cards/store'
 import { CardSheet } from './CardSheet'
 import { GameCard } from './GameCard'
 import {
-  addDeck,
   arquetipoDe,
   deckProblem,
-  deleteDeck,
   nivelDeCarta,
   repairDeck,
-  saveDeckAt,
-  setActiveDeck,
   usePlayer,
 } from '../game/players'
 import type { Deck } from '../game/players'
+import { hacer } from '../game/hacer'
 
 type Clase = 'batalla' | 'arma'
 
@@ -57,7 +54,8 @@ export function DeckScreen() {
   const listOf = (c: Clase) => (c === 'batalla' ? deck.battle : deck.weapons)
 
   const change = (next: Deck) => {
-    saveDeckAt(tab, next)
+    // Se cambia ya (por adelantado) y el servidor lo confirma.
+    void hacer({ tipo: 'guardarBaraja', indice: tab, baraja: next })
     setNotice(null)
   }
   const withList = (c: Clase, list: string[]): Deck => (c === 'batalla' ? { ...deck, battle: list } : { ...deck, weapons: list })
@@ -169,9 +167,9 @@ export function DeckScreen() {
             <button
               type="button"
               onClick={() => {
-                const error = addDeck()
-                setNotice(error)
-                if (!error) setTab(player.decks.length)
+                const nueva = player.decks.length
+                void hacer({ tipo: 'nuevaBaraja' }).then(({ error }) => setNotice(error ?? null))
+                setTab(nueva)
               }}
               className="rounded-lg border border-emerald-300/50 bg-emerald-500/15 px-3 py-1.5 text-[15px] text-emerald-50"
               title="Nueva baraja"
@@ -183,7 +181,7 @@ export function DeckScreen() {
             <button
               type="button"
               onClick={() => {
-                deleteDeck(tab)
+                void hacer({ tipo: 'borrarBaraja', indice: tab })
                 setTab(0)
               }}
               className="rounded-lg border border-rose-400/50 bg-rose-500/15 px-3 py-1.5 text-[15px] text-rose-50"
@@ -204,7 +202,7 @@ export function DeckScreen() {
             </button>
             <button
               type="button"
-              onClick={() => setNotice(setActiveDeck(tab))}
+              onClick={() => void hacer({ tipo: 'barajaPuesta', indice: tab }).then(({ error }) => setNotice(error ?? null))}
               disabled={active || Boolean(problem)}
               className="btn-gold text-[14px] disabled:opacity-40"
             >

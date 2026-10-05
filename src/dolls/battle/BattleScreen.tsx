@@ -12,8 +12,9 @@ import { patternById } from '../cards/patterns'
 import { setVolume, useVolumes } from '../settings/volumes'
 import { sonido, tocaSonido } from './samples'
 import type { ScenarioDef } from '../scenes/scenarios'
-import { createBot, stepBot } from './bot'
 import type { Bot } from './bot'
+import { Simulacion, aplicarJugada } from './simulacion'
+import type { Jugada, JugadaGrabada, Preparativos } from './simulacion'
 import {
   DEPLOY_BACK,
   DEPLOY_FRONT,
@@ -24,23 +25,17 @@ import {
   clampDeploy,
   clampFireLine,
   puedeSacar,
-  createBattle,
   drainEvents,
-  fireBonusDynamite,
   fortPos,
   rangoDeTorre,
-  soltarTorre,
   vivosDe,
   fireWeapon,
   weaponShotFromStroke,
   paceAt,
-  playCard,
-  rerollWeapon,
   slotCard,
   spawnUnit,
   step,
   tunnelExit,
-  useSpecial,
   weaponCard,
 } from './engine'
 import type { Battle, BattleEvent, Pace, Side, Unit, Vec } from './engine'
@@ -319,7 +314,7 @@ function CamaraViva({
 
 function Driver({
   battle,
-  bot,
+  sim,
   botQuieto,
   paused,
   paceRef,
@@ -328,7 +323,8 @@ function Driver({
   slow,
 }: {
   battle: Battle
-  bot: Bot
+  /** La partida a pasos fijos (con el bot y las jugadas apuntadas). */
+  sim: Simulacion
   /** El tutorial calla al bot mientras explica. */
   botQuieto: boolean
   slow: MutableRefObject<Lenta | null>
@@ -349,8 +345,7 @@ function Driver({
     }
     battle.timeScale = escala
     if (!paused) {
-      if (!botQuieto) stepBot(battle, bot)
-      step(battle, dt * escala)
+      sim.avanzar(dt * escala, !botQuieto)
     }
     paceRef.current = paceAt(battle.time)
     const events = drainEvents(battle)
@@ -500,12 +495,18 @@ interface Pending {
 /** Lo que hay que dejar quieto el dedo, ya sobre el campo, para que la carta salga como torre. */
 const TORRE_HOLD_MS = 700
 
+/**
+ * Monta la partida. Si viene `prep` (las partidas con premio), con su semilla y su clima: así el
+ * servidor la puede repetir igual. Si no, con semilla y clima al azar.
+ */
 function makeBattle(
   mine: CardDef[],
   theirs: CardDef[],
   extras?: { alcanceArma?: number; vida?: number },
-): { battle: Battle; bot: Bot } {
-  return { battle: createBattle({ decks: [mine, theirs], extras }), bot: createBot(1) }
+  prep?: Preparativos,
+): { battle: Battle; bot: Bot; sim: Simulacion } {
+  const sim = new Simulacion(prep ?? { mazos: [mine, theirs], extras, semilla: Math.floor(Math.random() * 2 ** 31), clima: climaAlAzar() })
+  return { battle: sim.battle, bot: sim.bot, sim }
 }
 
 export interface BattleScreenProps {
@@ -514,8 +515,16 @@ export interface BattleScreenProps {
   deck: CardDef[]
   botDeck: CardDef[]
   onExit: () => void
-  /** Al acabar la partida (para el perfil y para los retos de las incursiones). */
-  onFinish?: (won: boolean, seconds: number, resumen: ResumenDeBatalla) => void
+  /**
+   * Al acabar la partida (para el perfil y para los retos de las incursiones). Trae también las
+   * jugadas que has hecho, para que el servidor la repita y compruebe el resultado.
+   */
+  onFinish?: (won: boolean, seconds: number, resumen: ResumenDeBatalla, jugadas: JugadaGrabada[]) => void
+  /**
+   * La partida ya montada (semilla, mazos y clima): la de las partidas con premio, que vienen del
+   * servidor. Si viene, manda sobre `deck`, `botDeck` y `extras`.
+   */
+  prep?: Preparativos
   /** "Buscar otra partida": si viene, la monta el que llama (y cambia de escenario). */
   onRematch?: () => void
   /** Lo que te llevas (monedas, carta, entreno…): sale dentro del cartel del final. */
@@ -564,19 +573,21 @@ export interface GuiaDeBatalla {
   onEstado: (estado: EstadoDeGuia) => void
 }
 
-export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRematch, resultado, extras, etiqueta, prueba, guia, red }: BattleScreenProps) {
+export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRematch, resultado, extras, etiqueta, prueba, guia, red, prep }: BattleScreenProps) {
   const container = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 400, h: 800 })
   /** Los volúmenes del jugador (el modo prueba los calla y los devuelve como estaban). */
   const volumes = useVolumes()
-  const [game, setGame] = useState(() => makeBattle(deck, botDeck, extras))
+  const [game, setGame] = useState(() => makeBattle(prep?.mazos[0] ?? deck, prep?.mazos[1] ?? botDeck, prep?.extras ?? extras, prep))
   const [ready, setReady] = useState(false)
   const finished = useRef(false)
   /** Las bajas de la partida, para los retos de las incursiones. */
   const bajas = useRef(0)
   const perdidas = useRef(0)
   const [round, setRound] = useState(0)
-  const { battle, bot } = game
+  const { battle, sim } = game
+  /** Tu jugada: se hace y se apunta (para que el servidor pueda repetir la partida). */
+  const jugar = (j: Jugada) => sim.jugar(j)
   const [snap, setSnap] = useState<Snapshot>(() => snapshotOf(battle))
   const snapSeen = useRef('')
   const onFieldReady = useCallback(() => setReady(true), [])
@@ -777,15 +788,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     // El anfitrion hace lo que manda el invitado (que juega con el bando de arriba)…
     const quita = sala.alRecibir((m) => {
       if (m.tipo !== 'accion' || battle.over) return
-      const a = m.accion
-      if (a.a === 'carta') playCard(battle, 1, a.slot, a.x, a.z, a.precision, a.torre)
-      else if (a.a === 'disparo') fireWeapon(battle, 1, a.posicion, 0, a.destino)
-      else if (a.a === 'especial') useSpecial(battle, 1, a.destino)
-      else if (a.a === 'dinamita') fireBonusDynamite(battle, 1, a.origen, a.destino)
-      else if (a.a === 'soltarTorre') {
-        const u = battle.units.find((x) => x.id === a.unitId)
-        if (u && u.side === 1) soltarTorre(battle, a.unitId)
-      } else if (a.a === 'reroll') rerollWeapon(battle, 1)
+      aplicarJugada(battle, 1, m.accion)
     })
     /*
      * **El reloj del anfitrion.** La partida con un amigo no puede depender de que la ventana se vea:
@@ -872,7 +875,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
   useEffect(() => {
     if (fase === 'vs') {
       const id = setTimeout(() => {
-        setClima(climaAlAzar())
+        setClima(battle.clima)
         setFase('ruleta')
       }, 2600)
       return () => clearTimeout(id)
@@ -1263,13 +1266,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
             }
             if (!finished.current) {
               finished.current = true
-              onFinish?.(event.winner === 0, battle.time, {
-                ganada: event.winner === 0,
-                segundos: battle.time,
-                bajas: bajas.current,
-                perdidas: perdidas.current,
-                fuerte: (battle.forts[0].hp / Math.max(1, battle.forts[0].maxHp)) * 100,
-              })
+              onFinish?.(event.winner === 0, battle.time, sim.resumen(), sim.jugadas)
             }
             break
           default:
@@ -1337,7 +1334,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
         const ahora = performance.now()
         if (lastTap.current && lastTap.current.id === torre.id && ahora - lastTap.current.at < 450) {
           if (invitado) enviarAccion({ a: 'soltarTorre', unitId: torre.id })
-          else soltarTorre(battle, torre.id)
+          else jugar({ a: 'soltarTorre', unitId: torre.id })
           lastTap.current = null
           setCallout({ text: '¡AL ATAQUE!', key: nextId.current++ })
         } else {
@@ -1507,7 +1504,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
         const target = d.overField ? groundAt(d.x, d.y) : null
         if (target) {
           if (invitado) enviarAccion({ a: 'especial', destino: alReves(target) })
-          else useSpecial(battle, 0, target)
+          else jugar({ a: 'especial', destino: { x: target.x, z: target.z } })
         }
       } else {
         if (card?.shot.mode === 'explosivo') {
@@ -1516,13 +1513,13 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
           if (target) {
             const posicion = clampFireLine(0, target.x).x
             if (invitado) enviarAccion({ a: 'disparo', posicion: -posicion, destino: alReves(target) })
-            else fireWeapon(battle, 0, posicion, 0, target)
+            else jugar({ a: 'disparo', posicion, destino: { x: target.x, z: target.z } })
           }
         } else {
           const shot = weaponShotFromStroke(0, path)
           if (shot) {
             if (invitado) enviarAccion({ a: 'disparo', posicion: -shot.position })
-            else fireWeapon(battle, 0, shot.position)
+            else jugar({ a: 'disparo', posicion: shot.position })
           }
         }
       }
@@ -1533,7 +1530,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
       if (d.overField) {
         const origin = clampFireLine(0, d.wx).x
         if (invitado) enviarAccion({ a: 'dinamita', origen: -origin, destino: alReves({ x: d.wx, z: d.wz }) })
-        else fireBonusDynamite(battle, 0, origin, { x: d.wx, z: d.wz })
+        else jugar({ a: 'dinamita', origen: origin, destino: { x: d.wx, z: d.wz } })
       }
       clearPreview()
       return
@@ -1554,7 +1551,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
     if (!pending) return
     const sale = invitado
       ? (enviarAccion({ a: 'carta', slot: pending.slot, x: -pending.x, z: -pending.z, precision: accuracy, torre: pending.torre }), true)
-      : playCard(battle, 0, pending.slot, pending.x, pending.z, accuracy, pending.torre)
+      : jugar({ a: 'carta', slot: pending.slot, x: pending.x, z: pending.z, precision: accuracy, torre: pending.torre })
     if (!sale) setCallout({ text: 'NO HA PODIDO SALIR', key: nextId.current++ })
     setPending(null)
     clearPreview()
@@ -1665,7 +1662,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
         <CamaraViva cameraRef={cameraRef} baseRef={camBase} battle={battle} activa={camActiva} focus={finalFocus} punch={punch} />
         <Driver
           battle={battle}
-          bot={bot}
+          sim={sim}
           botQuieto={Boolean(guia?.botQuieto) || Boolean(red)}
           slow={slow}
           paused={Boolean(over) || !ready || fase !== 'listo' || Boolean(guia?.pausa) || Boolean(red)}
@@ -1876,7 +1873,7 @@ export function BattleScreen({ scenario, deck, botDeck, onExit, onFinish, onRema
         type="button"
         title="Cambia el arma por otra al azar. Se recarga cada 30 s"
         onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => (invitado ? enviarAccion({ a: 'reroll' }) : rerollWeapon(battle, 0))}
+        onClick={() => (invitado ? enviarAccion({ a: 'reroll' }) : jugar({ a: 'reroll' }))}
         disabled={snap.rerollIn > 0}
         className={`absolute z-10 flex items-center justify-center gap-1 rounded-xl border-2 text-[14px] font-bold uppercase leading-none tracking-wider ${
           snap.rerollIn > 0

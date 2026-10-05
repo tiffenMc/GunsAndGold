@@ -21,7 +21,7 @@ export async function api<T>(
   { metodo = 'GET', cuerpo, token, alSalir = false }: { metodo?: string; cuerpo?: unknown; token?: string; alSalir?: boolean } = {},
 ): Promise<Respuesta<T>> {
   try {
-    const r = await fetch(`/api${ruta}`, {
+    const peticion: RequestInit = {
       method: metodo,
       headers: {
         accept: 'application/json',
@@ -29,9 +29,10 @@ export async function api<T>(
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
-      // Al cerrar la página, que el último guardado llegue igual.
-      keepalive: alSalir,
-    })
+    }
+    // Al cerrar la página, que lo último llegue igual.
+    ;(peticion as { keepalive?: boolean }).keepalive = alSalir
+    const r = await fetch(`/api${ruta}`, peticion)
     const datos = (await r.json().catch(() => ({}))) as T & { error?: string }
     if (!r.ok) return { ok: false, error: datos.error ?? 'El servidor no contesta bien', estado: r.status }
     return { ok: true, datos }

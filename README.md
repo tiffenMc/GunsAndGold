@@ -45,13 +45,25 @@ amigos), `npm run servidor` (abre http://localhost:8787/).
 Va en Cloudflare: la web son los archivos de `dist/` y el servidor es `servidor/worker.ts` con dos
 Durable Objects (con SQLite):
 
-- `Pueblo` — las cuentas (usuario y contraseña, la contraseña resumida con PBKDF2), la partida de
-  cada cuenta (sus personajes) y las fichas de Los Más Buscados. Rutas en `/api/…`.
+- `Pueblo` — las cuentas (usuario y contraseña, la contraseña resumida con PBKDF2), los personajes
+  de cada cuenta, las partidas en juego y las fichas de Los Más Buscados. Rutas en `/api/…`.
 - `Sala` — una sala por código para jugar con un amigo (WebSocket en `/sala`).
 
+**Manda el servidor.** Los personajes solo cambian con las acciones del juego
+(`src/dolls/game/acciones.ts`: comprar, abrir sobres, cobrar encargos, barajas…), que el servidor
+hace con **el mismo código** que el móvil. Las partidas con premio llevan un billete
+(`src/dolls/game/jugar.ts`):
+
+1. Al empezar, el servidor da la **semilla** (y cobra la entrada de las incursiones).
+2. La partida se juega en el móvil, sin retraso, a pasos fijos y con las jugadas apuntadas
+   (`src/dolls/battle/simulacion.ts`).
+3. Al acabar, el premio sale al momento (calculado con la semilla) y el servidor **repite la
+   partida** con esas jugadas, a trozos de 120 pasos (el plan gratis deja 10 ms por vez), y da el
+   premio según lo que salga de verdad.
+
+Para que la partida salga idéntica en cualquier móvil y en el servidor, la simulación usa
+`src/dolls/battle/mates.ts` (seno, coseno, ángulos… hechos solo con sumas, productos y raíces).
 Lo que decide el servidor sin depender de Cloudflare está en `servidor/logica.ts` (con sus tests).
-Ojo: de momento el juego le manda al servidor su partida tal cual, así que las monedas aún se
-pueden falsear; para que no, las partidas tienen que jugarse en el servidor.
 
 ## Créditos
 

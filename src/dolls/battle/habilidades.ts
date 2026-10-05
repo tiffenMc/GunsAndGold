@@ -1,3 +1,4 @@
+import * as M from './mates'
 import type { Battle, Side, Unit, Vec } from './engine'
 import { FIELD_L, FIELD_W, FORT_Z, SIEGE_RANGE, UNIT_R, alive, hiddenBySmoke, hurtUnit } from './engine'
 import type { Estilo } from './estilos'
@@ -347,7 +348,7 @@ type Impacto =
 // ---------------------------------------------------------------------------
 
 function dist(a: Vec, b: Vec): number {
-  return Math.hypot(a.x - b.x, a.z - b.z)
+  return M.hypot(a.x - b.x, a.z - b.z)
 }
 
 function dentro(at: Vec): Vec {
@@ -400,7 +401,7 @@ function pose(battle: Battle, unit: Unit, p: Pose, dur: number) {
 function empujar(unit: Unit, from: Vec, fuerzaM: number) {
   const dx = unit.x - from.x
   const dz = unit.z - from.z
-  const l = Math.hypot(dx, dz) || 1
+  const l = M.hypot(dx, dz) || 1
   unit.knockback.x += (dx / l) * fuerzaM * 2.2
   unit.knockback.z += (dz / l) * fuerzaM * 2.2
   unit.hitStun = Math.max(unit.hitStun, 0.25)
@@ -435,11 +436,11 @@ function proyectil(battle: Battle, unit: Unit, to: Vec, dur: number, alto: numbe
 
 /** Un punto a `largo` de la tropa en la direccion `ang` (0 = hacia +z). */
 function enDireccion(from: Vec, ang: number, largo: number): Vec {
-  return { x: from.x + Math.sin(ang) * largo, z: from.z + Math.cos(ang) * largo }
+  return { x: from.x + M.sin(ang) * largo, z: from.z + M.cos(ang) * largo }
 }
 
 function anguloA(from: Vec, to: Vec): number {
-  return Math.atan2(to.x - from.x, to.z - from.z)
+  return M.atan2(to.x - from.x, to.z - from.z)
 }
 
 /** El enemigo mas cercano a un punto (de los que se ven). */
@@ -629,7 +630,7 @@ function iniciar(battle: Battle, unit: Unit, foe: Unit | null) {
         activar(unit, 0.6, foe, { tx: unit.x, tz: unit.z, ox: unit.x, oz: unit.z, r })
         break
       }
-      const destino = foe ? dentro({ x: foe.x - Math.sin(anguloA(unit, foe)) * 0.8, z: foe.z - Math.cos(anguloA(unit, foe)) * 0.8 }) : dentro(at)
+      const destino = foe ? dentro({ x: foe.x - M.sin(anguloA(unit, foe)) * 0.8, z: foe.z - M.cos(anguloA(unit, foe)) * 0.8 }) : dentro(at)
       pose(battle, unit, 'salto', 0.75)
       activar(unit, 0.75, foe, { tx: destino.x, tz: destino.z, ox: unit.x, oz: unit.z, r: hab.variante === 'pisoton' ? 2.8 : 2.3 })
       break
@@ -860,7 +861,7 @@ function iniciar(battle: Battle, unit: Unit, foe: Unit | null) {
       const ang = anguloA(unit, at)
       for (let i = 0; i < n; i++) {
         const lado = (i - (n - 1) / 2) * 1.6
-        const de = { x: unit.x + Math.cos(ang) * lado, z: unit.z - Math.sin(ang) * lado }
+        const de = { x: unit.x + M.cos(ang) * lado, z: unit.z - M.sin(ang) * lado }
         pon(battle, {
           k: 'proy',
           id: battle.nextId++,
@@ -965,7 +966,7 @@ function iniciar(battle: Battle, unit: Unit, foe: Unit | null) {
       const ida = adelante(unit.side)
       for (let i = 0; i < 4; i++) {
         const a = (i - 1.5) * 0.55
-        const at = dentro({ x: unit.x + Math.sin(a) * R * 0.7, z: unit.z + ida * Math.cos(a) * R * 0.7 })
+        const at = dentro({ x: unit.x + M.sin(a) * R * 0.7, z: unit.z + ida * M.cos(a) * R * 0.7 })
         pon(battle, { k: 'zona', id: battle.nextId++, side: unit.side, x: at.x, z: at.z, r: 0.9, desde: t, hasta: t + 12, color: hab.color, estilo: 'red', cadaS: 0.2, next: t + 0.2, golpe: 0, atrapa: 2.6, usos: 1 })
       }
       pose(battle, unit, 'canaliza', 0.8)
@@ -1055,7 +1056,7 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
     case 'llamas': {
       // Sigue al objetivo (la torre barre de lado a lado).
       let ang = n.ang!
-      if (unit.torre) ang = n.ang! + Math.sin(a.t * 2.2) * 1.1
+      if (unit.torre) ang = n.ang! + M.sin(a.t * 2.2) * 1.1
       else if (vivo) ang = anguloA(unit, vivo)
       n.ang = unit.torre ? n.ang! : ang
       unit.heading = ang
@@ -1082,7 +1083,7 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
       if (!unit.torre) {
         if (orbita && vivo) {
           n.orb = n.orb! + dt * 4.2
-          const destino = dentro({ x: vivo.x + Math.sin(n.orb) * 1.6, z: vivo.z + Math.cos(n.orb) * 1.6 })
+          const destino = dentro({ x: vivo.x + M.sin(n.orb) * 1.6, z: vivo.z + M.cos(n.orb) * 1.6 })
           unit.x += (destino.x - unit.x) * Math.min(1, dt * 8)
           unit.z += (destino.z - unit.z) * Math.min(1, dt * 8)
         } else {
@@ -1094,7 +1095,7 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
           }
           const p = dentro(enDireccion(unit, n.dir!, 2.6 * dt))
           // Si choca con el borde, sale rebotado hacia otro lado.
-          if (Math.abs(p.x - unit.x - Math.sin(n.dir!) * 2.6 * dt) > 0.001) n.dir = -n.dir!
+          if (Math.abs(p.x - unit.x - M.sin(n.dir!) * 2.6 * dt) > 0.001) n.dir = -n.dir!
           unit.x = p.x
           unit.z = p.z
         }
@@ -1114,11 +1115,11 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
       if (n.fase === 0) {
         const tx = vivo ? vivo.x : n.tx!
         const tz = vivo ? vivo.z : n.tz!
-        const d = Math.hypot(tx - unit.x, tz - unit.z)
-        unit.heading = Math.atan2(tx - unit.x, tz - unit.z)
+        const d = M.hypot(tx - unit.x, tz - unit.z)
+        unit.heading = M.atan2(tx - unit.x, tz - unit.z)
         const paso = Math.min(d, 8 * dt)
-        unit.x += Math.sin(unit.heading) * paso
-        unit.z += Math.cos(unit.heading) * paso
+        unit.x += M.sin(unit.heading) * paso
+        unit.z += M.cos(unit.heading) * paso
         if (d <= 1 || a.t > 2.4) {
           const grande = hab.variante === 'grande'
           const r = grande ? 2 : 1.2
@@ -1406,8 +1407,8 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
               if (e === vivo) continue
               const rx = e.x - unit.x
               const rz = e.z - unit.z
-              const along = rx * Math.sin(ang) + rz * Math.cos(ang)
-              const lateral = Math.abs(rx * Math.cos(ang) - rz * Math.sin(ang))
+              const along = rx * M.sin(ang) + rz * M.cos(ang)
+              const lateral = Math.abs(rx * M.cos(ang) - rz * M.sin(ang))
               if (along > 0 && lateral < 0.8) golpear(battle, e, golpe * 0.8, unit, { arma: true })
             }
           }
@@ -1482,11 +1483,11 @@ export function pasoHabilidad(battle: Battle, unit: Unit, dt: number): boolean {
       if (unit.torre) break
       const tx = vivo ? vivo.x : unit.x
       const tz = vivo ? vivo.z : unit.z + adelante(unit.side) * 3
-      const d = Math.hypot(tx - unit.x, tz - unit.z)
-      unit.heading = Math.atan2(tx - unit.x, tz - unit.z)
+      const d = M.hypot(tx - unit.x, tz - unit.z)
+      unit.heading = M.atan2(tx - unit.x, tz - unit.z)
       const paso = Math.min(d, 5.5 * dt)
-      unit.x += Math.sin(unit.heading) * paso
-      unit.z += Math.cos(unit.heading) * paso
+      unit.x += M.sin(unit.heading) * paso
+      unit.z += M.cos(unit.heading) * paso
       if (d < 0.9 || a.t > 3.5) {
         // Explota: el estilo ya lo tiene (explota al caer).
         unit.sacrificado = true
@@ -1585,7 +1586,7 @@ export function pasoEfectos(battle: Battle) {
           const u = battle.units.find((x) => x.id === e.orbita!.unitId)
           const centro = u && alive(u) ? u : e.from
           const ang = e.orbita.a0 + (t - e.desde) * e.orbita.w
-          pos = { x: centro.x + Math.cos(ang) * e.orbita.r, z: centro.z + Math.sin(ang) * e.orbita.r }
+          pos = { x: centro.x + M.cos(ang) * e.orbita.r, z: centro.z + M.sin(ang) * e.orbita.r }
           // Cada vuelta puede volver a dar al mismo.
           if (Math.floor(((t - e.desde) * e.orbita.w) / (Math.PI * 2)) !== Math.floor(((t - e.desde - 1 / 60) * e.orbita.w) / (Math.PI * 2))) e.vistos = []
         } else if (e.vuelta !== undefined) {
@@ -1681,7 +1682,7 @@ export function posicionDe(battle: Battle, e: Extract<Efecto, { k: 'proy' }>): {
     const u = battle.units.find((x) => x.id === e.orbita!.unitId)
     const centro = u ?? e.from
     const ang = e.orbita.a0 + (battle.time - e.desde) * e.orbita.w
-    return { x: centro.x + Math.cos(ang) * e.orbita.r, y: 1.6, z: centro.z + Math.sin(ang) * e.orbita.r, k }
+    return { x: centro.x + M.cos(ang) * e.orbita.r, y: 1.6, z: centro.z + M.sin(ang) * e.orbita.r, k }
   }
   if (e.vuelta !== undefined) {
     const u = battle.units.find((x) => x.id === e.vuelta)
