@@ -370,17 +370,19 @@ function CamaraDeCine({ heroe, zoom, torre }: { heroe: MutableRefObject<Unit | n
   const mira = useRef(new Vector3(0, 1.5, SALIDA_Z))
   useFrame((_, raw) => {
     const dt = Math.min(0.05, raw)
-    t.current += dt
+    // (El tiempo de verdad: en un móvil lento la entrada no se queda a medias, pegada al muñeco.)
+    t.current += Math.min(0.25, raw)
     const h = heroe.current
     const hx = h ? h.x : 0
     const hz = h ? h.z : SALIDA_Z
     // La entrada: de cerca (de frente) a su sitio (detrás), en 1,6 s.
     const k = Math.min(1, t.current / 1.6)
     const e = k * k * (3 - 2 * k)
-    const lejos = torre ? 11 : 8.5
-    const alto = torre ? 7.5 : 5.2
+    // Lejos y en alto: el héroe se ve entero, con los rivales delante, sin tapar la escena.
+    const lejos = torre ? 15 : 13
+    const alto = torre ? 10 : 8
     const vaiven = Math.sin(t.current * 0.35) * 1.6
-    const cerca = new Vector3(hx + 2.2, 3.4, hz - 8.5)
+    const cerca = new Vector3(hx + 2.5, 4.2, hz - 10.5)
     const sitio = new Vector3(hx * 0.6 + vaiven, alto, hz + lejos)
     camera.position.lerpVectors(cerca, sitio, e)
     const objetivo = new Vector3(hx * 0.7, 1.6, hz - (torre ? 4.5 : 3.5) * e)

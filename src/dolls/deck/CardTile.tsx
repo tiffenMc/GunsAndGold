@@ -12,9 +12,7 @@ import {
   LEVEL_LABEL,
   QUALITIES,
   SHOT_MODES,
-  STRENGTH_NOTE,
   cardPower,
-  cardStrength,
   patternLevelFor,
   rarityInfo,
   rarityOf,
@@ -143,17 +141,6 @@ function Row({ label, value, note }: { label: string; value: string; note?: stri
   )
 }
 
-/** La chapa de la esquina: el numero que llevan todas las cartas. */
-function StrengthRow({ card }: { card: CardDef }) {
-  const strength = cardStrength(card)
-  return (
-    <Row
-      label="Fuerza"
-      value={`${'★'.repeat(strength)}${'☆'.repeat(6 - strength)} ${strength}/6`}
-      note="El resumen de la carta de un vistazo: 1 es un novato y 6 una leyenda"
-    />
-  )
-}
 
 /** Lo que sale segun lo bien que dibujes: de Mal a Excelente. */
 export function QualityTable({ card }: { card: BattleCard }) {
@@ -278,7 +265,6 @@ export function CardStats({
           </div>
         </div>
         <QualityTable card={card} />
-        <StrengthNote />
       </div>
     )
   }
@@ -287,11 +273,9 @@ export function CardStats({
     return (
       <div>
         <p className="mb-1 text-[11px] text-amber-100/80">{special.note}</p>
-        <StrengthRow card={card} />
         <Row label="Tipo" value={`Especial · ${special.label}`} />
         <Row label="Duración" value={`${special.seconds} s`} />
         <Row label="Usos" value="1, luego cambia (3 s)" />
-        <StrengthNote />
       </div>
     )
   }
@@ -299,7 +283,6 @@ export function CardStats({
   return (
     <div>
       <p className="mb-1 text-[11px] text-amber-100/80">{mode?.note}</p>
-      <StrengthRow card={card} />
       <Row label="Disparo" value={mode?.label ?? ''} />
       <Row label="Alcance" value={`${card.shot.range.toFixed(0)} m`} />
       <Row label="Escudos por impacto" value={String(card.shot.shieldsPerHit)} />
@@ -308,12 +291,7 @@ export function CardStats({
       )}
       {card.shot.mode === 'explosivo' && <Row label="Radio" value={`${card.shot.radius.toFixed(1)} m`} />}
       <Row label="Usos" value="2, luego cambia (3 s)" />
-      <StrengthNote />
     </div>
   )
 }
 
-/** Lo que quiere decir el numero de la chapa, que nadie sabe de donde sale. */
-function StrengthNote() {
-  return <p className="mt-1.5 text-[10px] leading-snug text-amber-200/60">{STRENGTH_NOTE}</p>
-}

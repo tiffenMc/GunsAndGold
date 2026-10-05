@@ -59,7 +59,9 @@ function viewOf(card: CardDef): View {
     // Se encuadra desde detras del arma (que se vea entera) hasta un poco mas alla del alcance.
     return { near: FIRE_LINE + 4.2, far: FIRE_LINE - card.shot.range - 2, width: 9.5 }
   }
-  return { near: VAQUERO_Z + 2.5, far: VAQUERO_Z - card.range - 6, width: 9 }
+  // Siempre con sitio: aunque llegue poco (los de cuerpo a cuerpo), se ve la pelea entera y el
+  // muñeco no tapa la escena.
+  return { near: VAQUERO_Z + 3.5, far: VAQUERO_Z - Math.max(card.range * 1.5, 7) - 7, width: 15 }
 }
 
 /** Donde sale tu vaquero en la prueba. */
@@ -292,7 +294,7 @@ export function PopupLayer({ items }: { items: Popup[] }) {
 
 export function Galeria({ card, className = '', torre = false }: { card: CardDef; className?: string; torre?: boolean }) {
   const [battle, setBattle] = useState(() => makeTestBattle(card, torre))
-  const view = useMemo(() => (torre && card.kind === 'batalla' ? { near: VAQUERO_Z + 4, far: VAQUERO_Z - 15, width: 11 } : viewOf(card)), [card, torre])
+  const view = useMemo(() => (torre && card.kind === 'batalla' ? { near: VAQUERO_Z + 4.5, far: VAQUERO_Z - 17, width: 15 } : viewOf(card)), [card, torre])
   const scenario = SCENARIOS[0]!
   const box = useRef<HTMLDivElement>(null)
   const cameraRef = useRef<OrthographicCamera | null>(null)

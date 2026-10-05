@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Rarity } from '../cards/model'
-import { RARITIES, STRENGTH_LEGEND, rarityOf } from '../cards/model'
+import { RARITIES, rarityOf } from '../cards/model'
 import { useGameCards } from '../cards/store'
 import { CardSheet } from '../deck/CardSheet'
 import { SelloChapa } from '../deck/Sello'
@@ -45,7 +45,7 @@ export function CollectionScreen() {
           <div className="min-w-0 flex-1">
             <p className="font-west text-xl leading-none tracking-wide text-amber-50">Colección de cartas</p>
             <p className="mt-0.5 text-[13px] text-amber-200/70">
-              Tienes {mine.length} de {cards.length} cartas · {STRENGTH_LEGEND}
+              Tienes {mine.length} de {cards.length} cartas
             </p>
           </div>
           <span className="hidden rounded-lg border border-amber-900/60 bg-black/30 px-2 py-1 text-[12px] text-amber-200/70 sm:block">
