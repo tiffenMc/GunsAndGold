@@ -3,17 +3,15 @@ import type { BattleCard } from '../cards/model'
 import { useGameCards } from '../cards/store'
 import { Avatar } from './Avatar'
 import {
-  createPlayer,
   defaultUnlocked,
-  deletePlayer,
   levelOf,
   switchPlayer,
   unlockAll,
-  updatePlayer,
   usePlayer,
   usePlayers,
 } from './players'
 import type { Player } from './players'
+import { hacer } from './hacer'
 import { CLASES, MAX_PERSONAJES, claseInfo } from './clases'
 import { BorrarPersonaje } from './BorrarPersonaje'
 
@@ -129,7 +127,7 @@ export function PlayerScreen({
                   type="button"
                   onClick={() => {
                     if (!window.confirm(`¿Borrar a «${item.name}»? Se van sus barajas y sus cartas.`)) return
-                    setNotice(deletePlayer(item.id))
+                    void hacer({ tipo: 'borrar', id: item.id }).then(({ error }) => setNotice(error ?? null))
                   }}
                   className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-2 py-1.5 text-[13px] text-rose-100"
                   title="Borrar jugador"
@@ -179,11 +177,10 @@ function PlayerEditor({
   const [avatar, setAvatar] = useState(player?.avatar ?? battles[0]?.id ?? 'vaquero')
   const save = () => {
     if (player) {
-      updatePlayer({ name: name.trim() || player.name, avatar })
+      void hacer({ tipo: 'perfil', nombre: name.trim() || player.name, avatar })
       onDone('Perfil guardado')
     } else {
-      const created = createPlayer(name, avatar)
-      onDone(`¡${created.name} está dentro!`)
+      void hacer({ tipo: 'crear', nombre: name, avatar, clase: 'vaqueros' }).then(({ error }) => onDone(error ?? `¡${name.trim() || 'Personaje'} está dentro!`))
     }
     onClose()
   }
@@ -419,7 +416,7 @@ function PantallaCuenta({
           personaje={aBorrar}
           onCancelar={() => setABorrar(null)}
           onBorrar={() => {
-            setAviso(deletePlayer(aBorrar.id))
+            void hacer({ tipo: 'borrar', id: aBorrar.id }).then(({ error }) => setAviso(error ?? null))
             setABorrar(null)
           }}
         />

@@ -1,8 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icono } from './Icono'
 import type { ReactNode } from 'react'
-import { arquetipoAlAzar, arquetipoInfo, conArquetipo } from './cards/arquetipos'
-import type { Arquetipo } from './cards/arquetipos'
+import { arquetipoInfo } from './cards/arquetipos'
 import type { BattleCard, CardDef } from './cards/model'
 import { gameCards, todasLasCartasDelJuego, useGameCards } from './cards/store'
 import { useAuth } from '../hooks/useAuth'
@@ -11,37 +10,23 @@ import { cerrarSesionLocal, useCuentaLocal } from './auth/cuentasLocales'
 import { conectarCuenta, estaConectada } from './auth/sincronizar'
 import { jugadorDeCuenta } from './auth/cuentaJugador'
 import { PersonajesScreen } from './game/PersonajesScreen'
-import { atarPersonaje, moverMonedas, objetivosDeHoy, personajesDe, pintaDe, players, sobresPendientes, switchPlayer } from './game/players'
+import { atarPersonaje, objetivosDeHoy, personajesDe, pintaDe, players, sobresPendientes, switchPlayer } from './game/players'
 import { EN_LA_TARIMA, useRanking } from './game/ranking'
-import { botinDeRango, premioDeRango, rangoDe } from './game/progreso'
+import { rangoDe } from './game/progreso'
+import { abandonarPartida, costeDeIrse, empezarPartida, terminarPartida } from './game/jugar'
+import type { Billete } from './game/jugar'
+import type { Botin, Encargo, Premio } from './game/partidas'
 import { Entrenar, Incursiones, espera } from './campo/CampoScreen'
 import { useNow } from '../hooks/useNow'
 import { SobreScreen } from './sobres/SobreScreen'
 import type { Mision } from './campo/CampoScreen'
 import { PortraitBaker } from './card3d/portraits'
 import { Avatar } from './game/Avatar'
-import { CARACTERISTICAS, caracteristicaInfo, premioDeEntreno } from './game/caracteristicas'
-import type { Caracteristica } from './game/caracteristicas'
-import { horaDeCambio, incursionesDeLaHora, premioDeCarta, puedePagar, retoCumplido } from './game/incursiones'
-import type { Incursion, ResumenDeBatalla } from './game/incursiones'
-import {
-  arquetipoDe,
-  cartasDeLaBaraja,
-  deckProblem,
-  entrenarCaracteristica,
-  extrasDeBatalla,
-  ganarBotin,
-  ganarTrozoDeCarta,
-  gastarCaracteristicas,
-  getPlayer,
-  recordResult,
-  unlockRandom,
-  updatePlayer,
-  usePlayer,
-} from './game/players'
+import { CARACTERISTICAS, caracteristicaInfo } from './game/caracteristicas'
+import { horaDeCambio, incursionesDeLaHora, puedePagar } from './game/incursiones'
+import { cartasDeLaBaraja, deckProblem, getPlayer, updatePlayer, usePlayer } from './game/players'
 
 import { SCENARIOS, nextScenario } from './scenes/scenarios'
-import type { ScenarioDef } from './scenes/scenarios'
 import { SettingsModal } from './settings/SettingsModal'
 import { SafeCanvas } from './SafeCanvas'
 import { useEscalaPc } from './escalaPc'
@@ -57,14 +42,6 @@ import { BarPanel, PanelDeSitio, RangoPanel, SaloonPanel, TablonPanel, Viaje } f
 import type { PestanaBar } from './pueblo/Zonas'
 import { BuscadosPanel } from './pueblo/BuscadosPanel'
 import { SastreriaPanel } from './pueblo/SastreriaPanel'
-
-/** Lo que te llevas al acabar una partida: una carta nueva, un entreno o un trozo de carta. */
-type Premio =
-  | { tipo: 'carta'; card: CardDef; arquetipo?: Arquetipo }
-  | { tipo: 'entreno'; stat: Caracteristica; subido: number }
-  | { tipo: 'entreno-fallo'; stat: Caracteristica }
-  | { tipo: 'incursion'; cardId: string; porcentaje: number; llevo: number; nueva: boolean; arquetipo?: Arquetipo }
-  | { tipo: 'incursion-fallo'; incursion: Incursion; resumen: ResumenDeBatalla }
 
 const BattleScreen = lazy(() => import('./battle/BattleScreen').then((m) => ({ default: m.BattleScreen })))
 const PlayerScreen = lazy(() => import('./game/PlayerScreen').then((m) => ({ default: m.PlayerScreen })))
@@ -413,17 +390,31 @@ function PartidaAmigo({ amigo, onSalir }: { amigo: PartidaConAmigo; onSalir: () 
   )
 }
 
+/** Lo que se juega, en lo justo para el servidor (la incursión, por su id). */
+export function encargoDe(mision: Mision): Encargo {
+  return { tipo: mision.tipo, stat: mision.stat, incursionId: mision.incursion?.id }
+}
+
 /**
  * La partida contra el bot con tu baraja puesta, en un escenario distinto al de la ultima vez.
- * Sirve para las tres cosas: partida libre, entreno de una caracteristica e incursion de carta.
+ * Sirve para todo: partida libre, de rango, entreno de una caracteristica e incursion de carta.
+ *
+ * Al empezar se pide el billete (con la semilla) al servidor; la partida se juega aquí, sin
+ * esperas, y al acabar el premio sale al momento y el servidor lo confirma (ver `game/jugar.ts`).
  */
-function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boolean) => void }) {
+function Partida({
+  mision,
+  onLeave,
+  onBillete,
+}: {
+  mision: Mision
+  onLeave: (terminada: boolean) => void
+  /** El billete de la partida que se está jugando (para saber lo que cuesta irse). */
+  onBillete: (billete: Billete | null) => void
+}) {
   const player = usePlayer()
   const cards = useGameCards()
-  const active = player.decks[player.activeDeck]
-  // Tu baraja, ya con el tipo de tirador de cada carta y los extras de tus características.
-  const deck = active ? cartasDeLaBaraja(player, active, cards) : gameCards()
-  const extras = extrasDeBatalla(player)
+  const encargo = useMemo(() => encargoDe(mision), [mision])
   const incursion = mision.tipo === 'incursion' ? mision.incursion : undefined
   const cartaDeLaIncursion = incursion ? cards.find((card) => card.id === incursion.cardId) : undefined
   const etiqueta =
@@ -432,37 +423,54 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
       : incursion
         ? `Incursión · ${cartaDeLaIncursion?.name ?? ''} · ${incursion.reto.label}`
         : undefined
-  const pick = (): ScenarioDef => {
-    const scenario = nextScenario(player.lastScenario)
-    updatePlayer({ lastScenario: scenario.id })
-    return scenario
-  }
   /** Lo que se ha llevado (o perdido) al acabar: sale en el cartel del final, no en otra ventana. */
-  const [premio, setPremio] = useState<Premio | null>(null)
-  const [monedas, setMonedas] = useState<number | null>(null)
-  /** Los lingotes (y el diamante, si ha caído) de la partida de rango. */
-  const [botin, setBotin] = useState<{ lingotes: number; diamantes: number } | null>(null)
+  const [botin, setBotin] = useState<Botin | null>(null)
   /** Ya ha acabado: salir es gratis. Mientras se juega, salir siempre penaliza. */
   const [terminada, setTerminada] = useState(false)
-  const onPrize = setPremio
-  const otra = () => {
-    setPremio(null)
-    setMonedas(null)
-    setBotin(null)
-    setTerminada(false)
-    setMatch((current) => ({ key: current.key + 1, scenario: pick() }))
-  }
+  /** El billete de la partida (con su semilla y la partida montada), o el error si no se pudo. */
+  const [billete, setBillete] = useState<Billete | { error: string } | null>(null)
   const [match, setMatch] = useState(() => {
     // ?escenario=mina fuerza el primero (para probar); luego siguen al azar.
     const forced = SCENARIOS.find((item) => item.id === new URLSearchParams(window.location.search).get('escenario'))
     // (Sin tocar el perfil aqui dentro: eso se apunta en el efecto de abajo, no mientras se pinta.)
     return { key: 1, scenario: forced ?? nextScenario(player.lastScenario) }
   })
+  // Cada partida nueva (y cada revancha) pide su billete.
   useEffect(() => {
+    let viva = true
+    setBillete(null)
+    onBillete(null)
+    void empezarPartida(encargo).then((b) => {
+      if (!viva) return
+      setBillete(b)
+      onBillete('error' in b ? null : b)
+    })
     updatePlayer({ lastScenario: match.scenario.id })
-    // Solo al salir un escenario nuevo.
+    return () => {
+      viva = false
+    }
+    // Solo al salir una partida nueva.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match.key])
+  const otra = () => {
+    setBotin(null)
+    setTerminada(false)
+    setMatch((current) => ({ key: current.key + 1, scenario: nextScenario(current.scenario.id) }))
+  }
+
+  if (!billete) return <Loading />
+  if ('error' in billete) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="font-west text-xl text-amber-100">No se ha podido empezar la partida</p>
+        <p className="text-[14px] text-amber-100/80">{billete.error}</p>
+        <button type="button" onClick={() => onLeave(true)} className="btn-gold">
+          Volver
+        </button>
+      </div>
+    )
+  }
+  const { monedas, tesoro, premio } = botin ?? { monedas: null, tesoro: null, premio: null }
   return (
     <SafeCanvas
       note=""
@@ -478,61 +486,15 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
       <BattleScreen
         key={match.key}
         scenario={match.scenario}
-        deck={deck.length > 0 ? deck : gameCards()}
-        // El bot tambien lleva sus tipos de tirador, sorteados en cada partida.
-        botDeck={gameCards().map((card) => (card.kind === 'batalla' ? conArquetipo(card, arquetipoAlAzar()) : card))}
-        extras={extras}
+        prep={billete.prep}
+        deck={billete.prep.mazos[0]}
+        botDeck={billete.prep.mazos[1]}
         etiqueta={etiqueta}
         onExit={() => onLeave(terminada)}
-        onFinish={(won, _segundos, resumen) => {
+        onFinish={(_won, _segundos, resumen, jugadas) => {
           setTerminada(true)
-          // La de rango va por monedas: lo que ganas se lo robas al rival (y al reves).
-          if (mision.tipo === 'rango') {
-            recordResult(won)
-            const premio = premioDeRango()
-            moverMonedas(won ? premio : -premio)
-            setMonedas(won ? premio : -premio)
-            // Y siempre caen lingotes (más si ganas); a veces, un diamante.
-            const suelto = botinDeRango(won)
-            ganarBotin(suelto)
-            setBotin(suelto)
-            if (!won) return
-            const card = unlockRandom()
-            if (card) onPrize({ tipo: 'carta', card, arquetipo: arquetipoDe(getPlayer(), card.id) })
-            return
-          }
-          if (mision.tipo === 'libre') {
-            recordResult(won)
-            if (!won) return
-            const card = unlockRandom()
-            if (card) onPrize({ tipo: 'carta', card, arquetipo: arquetipoDe(getPlayer(), card.id) })
-            return
-          }
-          if (mision.tipo === 'entreno' && mision.stat) {
-            if (!won) {
-              onPrize({ tipo: 'entreno-fallo', stat: mision.stat })
-              return
-            }
-            const subido = entrenarCaracteristica(mision.stat, premioDeEntreno())
-            onPrize({ tipo: 'entreno', stat: mision.stat, subido })
-            return
-          }
-          if (incursion) {
-            if (!retoCumplido(incursion.reto, resumen)) {
-              onPrize({ tipo: 'incursion-fallo', incursion, resumen })
-              return
-            }
-            const porcentaje = premioDeCarta()
-            const premio = ganarTrozoDeCarta(incursion.cardId, porcentaje)
-            onPrize({
-              tipo: 'incursion',
-              cardId: incursion.cardId,
-              porcentaje,
-              llevo: premio.llevo,
-              nueva: premio.nueva,
-              arquetipo: premio.arquetipo,
-            })
-          }
+          // El premio, al momento (el servidor lo confirma repitiendo la partida).
+          setBotin(terminarPartida(billete, encargo, resumen, jugadas))
         }}
         resultado={
           premio || monedas !== null ? (
@@ -543,14 +505,14 @@ function Partida({ mision, onLeave }: { mision: Mision; onLeave: (terminada: boo
                   {Math.abs(monedas)} <Icono nombre="monedas" />
                 </p>
               )}
-              {botin && (
+              {tesoro && (
                 <p className="flex items-center justify-center gap-3 font-west text-[22px] leading-none">
                   <span className="text-amber-300">
-                    +{botin.lingotes} <Icono nombre="lingotes" />
+                    +{tesoro.lingotes} <Icono nombre="lingotes" />
                   </span>
-                  {botin.diamantes > 0 && (
+                  {tesoro.diamantes > 0 && (
                     <span className="sobre-entra text-cyan-300" style={{ textShadow: '0 0 12px #22d3ee' }}>
-                      ¡+{botin.diamantes} <Icono nombre="diamantes" />!
+                      ¡+{tesoro.diamantes} <Icono nombre="diamantes" />!
                     </span>
                   )}
                 </p>
@@ -650,7 +612,11 @@ export function OesteApp() {
    * en este móvil o en otro) antes de elegir personaje.
    */
   const [conectada, setConectada] = useState(() => !cuenta?.token || estaConectada(cuenta.token))
+  /** Si no se ha podido hablar con el servidor al abrir (sin conexión): se ofrece reintentar. */
+  const [sinConexion, setSinConexion] = useState<string | null>(null)
+  const [intento, setIntento] = useState(0)
   useEffect(() => {
+    setSinConexion(null)
     if (!cuenta?.token || estaConectada(cuenta.token)) {
       setConectada(true)
       return
@@ -659,14 +625,17 @@ export function OesteApp() {
     let vivo = true
     void conectarCuenta(`local:${cuenta.usuario}`, cuenta.token).then((fallo) => {
       if (!vivo) return
+      if (!fallo) return setConectada(true)
       // La sesión ya no vale (p. ej. se cerró en otro sitio): a la puerta, a entrar otra vez.
-      if (fallo) cerrarSesionLocal()
-      setConectada(true)
+      if (/entrar otra vez/.test(fallo)) {
+        cerrarSesionLocal()
+        setConectada(true)
+      } else setSinConexion(fallo)
     })
     return () => {
       vivo = false
     }
-  }, [cuenta?.token, cuenta?.usuario])
+  }, [cuenta?.token, cuenta?.usuario, intento])
 
   /** La cuenta con la que se ha entrado (del dispositivo o de la nube), si hay. */
   const cuentaId = cuenta ? `local:${cuenta.usuario}` : auth.user ? `nube:${auth.user.id}` : null
@@ -726,11 +695,10 @@ export function OesteApp() {
     else abrir('desierto', 'incursiones')
     setMision({ tipo: 'libre' })
   }
+  /** El billete de la partida que se está jugando (con su semilla: lo que cuesta irse sale de ahí). */
+  const billete = useRef<Billete | null>(null)
   const jugar = (siguiente: Mision) => {
-    // Las incursiones se pagan al entrar: eso es el desgaste del intento.
-    if (siguiente.tipo === 'incursion' && siguiente.incursion) {
-      gastarCaracteristicas(siguiente.incursion.coste)
-    }
+    // Las incursiones se pagan al entrar (al pedir el billete): eso es el desgaste del intento.
     setMision(siguiente)
     setZona(null)
     setScreen('batalla')
@@ -745,7 +713,19 @@ export function OesteApp() {
       </SafeCanvas>
       <Column batalla={screen === 'batalla'}>
         {/* La puerta: sin cuenta no se juega. */}
-        {!auth.ready || !conectada ? (
+        {sinConexion ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+            <Logo ancho="min(220px, 60vw)" />
+            <p className="font-west text-xl text-amber-100">No hay conexión con el pueblo</p>
+            <p className="text-[14px] text-amber-100/80">{sinConexion}. Tus cosas están a salvo en el servidor.</p>
+            <button type="button" className="btn-gold" onClick={() => setIntento((n) => n + 1)}>
+              Reintentar
+            </button>
+            <button type="button" className="text-[13px] text-amber-100/70 underline" onClick={cerrarSesion}>
+              Cerrar sesión
+            </button>
+          </div>
+        ) : !auth.ready || !conectada ? (
           <Loading />
         ) : !auth.user && !cuenta && !invitado ? (
           // Con usuario (cuenta del dispositivo), con la nube o con el invitado de desarrollo.
@@ -874,12 +854,13 @@ export function OesteApp() {
             {screen === 'batalla' && !amigo && (
               <Partida
                 mision={mision}
+                onBillete={(b) => {
+                  billete.current = b
+                }}
                 onLeave={(terminada) => {
-                  if (!terminada) {
+                  if (!terminada && billete.current) {
                     // A media partida, salir siempre cuesta: se avisa con el modal y ya decide él.
-                    const porcentaje = mision.tipo === 'rango' ? 5 + Math.random() * 15 : 0
-                    const mordida = porcentaje > 0 ? Math.max(1, Math.round((getPlayer().monedas * porcentaje) / 100)) : 0
-                    setAbandono({ mordida, porcentaje: Math.round(porcentaje) })
+                    setAbandono(costeDeIrse(billete.current, encargoDe(mision)))
                     return
                   }
                   salirDeLaPartida()
@@ -928,8 +909,8 @@ export function OesteApp() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (abandono.mordida > 0) moverMonedas(-abandono.mordida)
-                      if (mision.tipo === 'rango' || mision.tipo === 'libre') recordResult(false)
+                      abandonarPartida(billete.current, encargoDe(mision))
+                      billete.current = null
                       setAbandono(null)
                       salirDeLaPartida()
                     }}

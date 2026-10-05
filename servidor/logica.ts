@@ -11,6 +11,14 @@ export const MAX_PERSONAJES = 6
 /** Las vueltas del resumen de la contraseña (PBKDF2). Pocas para que no se coma la CPU gratis. */
 export const VUELTAS = 5_000
 
+/** Lo más de jugadas que se aceptan de una partida (en 5 minutos no da para más). */
+export const MAX_JUGADAS = 6000
+
+/** Una semilla al azar para una partida (un entero positivo de 31 bits). */
+export function semillaAlAzar(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]! >>> 1
+}
+
 /** El usuario tal y como se compara: sin espacios a los lados y en minúsculas. */
 export function idDeUsuario(usuario: string): string {
   return usuario.trim().toLowerCase()
@@ -23,6 +31,8 @@ export function problemaDeUsuario(usuario: string): string | null {
   if (limpio.length > 20) return 'El usuario puede tener hasta 20 letras'
   if (!/^[\p{L}\p{N}_.\- ]+$/u.test(limpio)) return 'El usuario solo puede llevar letras, números, espacios y _ . -'
   if (limpio.includes('@')) return 'Sin arroba: eso es para el correo'
+  // El admin solo existe en el ordenador de pruebas (lo tiene todo): en el servidor no.
+  if (idDeUsuario(limpio) === 'admin') return 'Ese usuario está reservado: elige otro'
   return null
 }
 
@@ -110,4 +120,80 @@ export function problemaDePartida(personajes: unknown): string | null {
   if (personajes.length > MAX_PERSONAJES) return 'Demasiados personajes'
   if (JSON.stringify(personajes).length > MAX_DATOS) return 'La partida es demasiado grande'
   return null
+}
+
+// ---------------------------------------------------------------------------
+// Las jugadas de una partida
+// ---------------------------------------------------------------------------
+
+type Vec = { x: number; z: number }
+type JugadaLimpia =
+  | { a: 'carta'; slot: number; x: number; z: number; precision: number; torre: boolean }
+  | { a: 'disparo'; posicion: number; destino?: Vec }
+  | { a: 'especial'; destino: Vec }
+  | { a: 'dinamita'; origen: number; destino: Vec }
+  | { a: 'soltarTorre'; unitId: number }
+  | { a: 'reroll' }
+
+const finito = (v: unknown, min: number, max: number): number | null =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null
+
+function punto(v: unknown): Vec | null {
+  if (!v || typeof v !== 'object') return null
+  const p = v as Record<string, unknown>
+  const x = finito(p.x, -100, 100)
+  const z = finito(p.z, -100, 100)
+  return x === null || z === null ? null : { x, z }
+}
+
+function jugada(v: unknown): JugadaLimpia | null {
+  if (!v || typeof v !== 'object') return null
+  const j = v as Record<string, unknown>
+  switch (j.a) {
+    case 'carta': {
+      const slot = finito(j.slot, 0, 9)
+      const x = finito(j.x, -100, 100)
+      const z = finito(j.z, -100, 100)
+      const precision = finito(j.precision, 0, 1)
+      if (slot === null || !Number.isInteger(slot) || x === null || z === null || precision === null) return null
+      return { a: 'carta', slot, x, z, precision, torre: j.torre === true }
+    }
+    case 'disparo': {
+      const posicion = finito(j.posicion, -100, 100)
+      if (posicion === null) return null
+      const destino = j.destino === undefined ? undefined : punto(j.destino)
+      if (destino === null) return null
+      return destino ? { a: 'disparo', posicion, destino } : { a: 'disparo', posicion }
+    }
+    case 'especial': {
+      const destino = punto(j.destino)
+      return destino ? { a: 'especial', destino } : null
+    }
+    case 'dinamita': {
+      const origen = finito(j.origen, -100, 100)
+      const destino = punto(j.destino)
+      return origen === null || !destino ? null : { a: 'dinamita', origen, destino }
+    }
+    case 'soltarTorre': {
+      const unitId = finito(j.unitId, 0, 1e9)
+      return unitId === null || !Number.isInteger(unitId) ? null : { a: 'soltarTorre', unitId }
+    }
+    case 'reroll':
+      return { a: 'reroll' }
+    default:
+      return null
+  }
+}
+
+/** Las jugadas que manda el móvil, solo las que tienen buena pinta y en orden. */
+export function limpiarJugadas(brutas: unknown): { p: number; j: JugadaLimpia }[] {
+  if (!Array.isArray(brutas)) return []
+  const salida: { p: number; j: JugadaLimpia }[] = []
+  for (const b of brutas.slice(0, MAX_JUGADAS)) {
+    if (!b || typeof b !== 'object') continue
+    const p = finito((b as { p?: unknown }).p, 0, 1e6)
+    const j = jugada((b as { j?: unknown }).j)
+    if (p !== null && Number.isInteger(p) && j) salida.push({ p, j })
+  }
+  return salida
 }

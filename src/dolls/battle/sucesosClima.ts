@@ -1,3 +1,4 @@
+import * as M from './mates'
 import type { Battle, Unit } from './engine'
 import { FIELD_L, FIELD_W, alive, hurtUnit } from './engine'
 
@@ -301,7 +302,7 @@ function nuevoSuceso(battle: Battle): boolean {
 function tumbar(unit: Unit, desde: { x: number; z: number }, fuerza: number, aturde: number) {
   const dx = unit.x - desde.x
   const dz = unit.z - desde.z
-  const d = Math.hypot(dx, dz) || 1
+  const d = M.hypot(dx, dz) || 1
   unit.knockback.x = (dx / d) * fuerza
   unit.knockback.z = (dz / d) * fuerza
   unit.hitStun = Math.max(unit.hitStun, aturde)

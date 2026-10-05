@@ -1,3 +1,4 @@
+import * as M from './mates'
 import {
   FORT_Z,
   WALK_SPEED,
@@ -128,7 +129,7 @@ export function stepBot(battle: Battle, bot: Bot): void {
   // Se desliza por su linea de fuego hasta ponerse a tiro y gira para apuntar.
   const position = clampFireLine(bot.side, target.x * 0.35)
   const travel =
-    Math.hypot(target.x - position.x, target.z - position.z) / Math.max(1, weapon.shot.speed)
+    M.hypot(target.x - position.x, target.z - position.z) / Math.max(1, weapon.shot.speed)
   const moving = target.state === 'andar' ? WALK_SPEED * target.card.speed * pace.mult : 0
   const lead = moving * travel
   // Hacia donde va la tropa (hacia el fuerte del bot).

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { arquetipoAlAzar, conArquetipo } from '../cards/arquetipos'
 import type { Arquetipo } from '../cards/arquetipos'
-import { gameCards, setClaseActiva, todasLasCartasDelJuego } from '../cards/store'
+import { gameCards, getClaseActiva, setClaseActiva, todasLasCartasDelJuego } from '../cards/store'
 import { DECK_BATTLE, DECK_WEAPONS, MAX_DECKS, RARITY_ORDER, rarityOf } from '../cards/model'
 import type { CardDef, ClaseId } from '../cards/model'
 import { cartasDeClase } from './clases'
@@ -416,6 +416,8 @@ export function createPlayer(name: string, avatar: string, clase: ClaseId = 'vaq
     ...statLess(),
     arquetipos: tiposDe(unlocked),
   }
+  // La ropa del muñeco con el que empiezas es tuya.
+  player.armario = articulosDePago(lookDelRetrato(player))
   state = { players: [...state.players, player], current: player.id }
   persist()
   return player
@@ -493,16 +495,16 @@ export function deleteDeck(index: number): void {
 }
 
 /** Al ganar una partida se desbloquea una carta de las que faltan (y se le sortea el tipo). */
-export function unlockRandom(): CardDef | null {
+export function unlockRandom(azar: () => number = Math.random): CardDef | null {
   const player = getPlayer()
   const locked = gameCards().filter((card) => !player.unlocked.includes(card.id))
   if (locked.length === 0) return null
-  const card = locked[Math.floor(Math.random() * locked.length)]!
+  const card = locked[Math.floor(azar() * locked.length)]!
   patch({
     ...player,
     unlocked: [...player.unlocked, card.id],
     progreso: { ...player.progreso, [card.id]: Math.max(1, player.progreso[card.id] ?? 0) },
-    arquetipos: { ...player.arquetipos, [card.id]: player.arquetipos[card.id] ?? arquetipoAlAzar() },
+    arquetipos: { ...player.arquetipos, [card.id]: player.arquetipos[card.id] ?? arquetipoAlAzar(azar) },
   })
   return card
 }
@@ -659,6 +661,7 @@ export function nivelDeCarta(player: Player, cardId: string): number {
 export function ganarTrozoDeCarta(
   cardId: string,
   porcentaje: number,
+  azar: () => number = Math.random,
 ): { nueva: boolean; arquetipo?: Arquetipo; llevo: number } {
   const player = getPlayer()
   const llevo = Math.max(0, Math.min(100, Math.round(((player.progreso[cardId] ?? 0) + porcentaje) * 10) / 10))
@@ -666,7 +669,7 @@ export function ganarTrozoDeCarta(
   const arquetipos = { ...player.arquetipos }
   let arquetipo: Arquetipo | undefined
   if (eraNueva && llevo >= 1) {
-    arquetipo = arquetipos[cardId] ?? arquetipoAlAzar()
+    arquetipo = arquetipos[cardId] ?? arquetipoAlAzar(azar)
     arquetipos[cardId] = arquetipo
   }
   patch({
@@ -770,12 +773,16 @@ export function pintaDe(player: Player): DollLook {
   return player.pinta ? cloneLook(player.pinta) : lookDelRetrato(player)
 }
 
-/** Si ya tienes un artículo (lo compraste, es gratis, venía con tu retrato, o eres el admin). */
+/**
+ * Si ya tienes un artículo: lo compraste, es gratis, o eres el admin. Lo que llevaba el muñeco con
+ * el que empezaste se apunta en tu armario al crear el personaje (cambiar de retrato después no
+ * regala ropa).
+ */
 export function loTienes(player: Player, id: string): boolean {
   const cosa = articulo(id)
   if (!cosa) return false
   if (!cosa.precio || player.admin) return true
-  return player.armario.includes(id) || articulosDePago(lookDelRetrato(player)).includes(id)
+  return player.armario.includes(id)
 }
 
 function pagar(player: Player, moneda: Moneda, precio: number): Player | null {
@@ -870,4 +877,34 @@ export function importarPersonajes(cuentaId: string, lista: unknown[]): void {
   state = { players, current }
   setClaseActiva(players.find((player) => player.id === current)?.clase ?? 'vaqueros')
   persist()
+}
+
+// ---------------------------------------------------------------------------
+// Para el servidor: hacer cosas sobre los personajes de una cuenta
+// ---------------------------------------------------------------------------
+
+/**
+ * Ejecuta `fn` con estos jugadores como si fueran los del juego (con `actual` elegido) y devuelve
+ * lo que haya hecho y cómo han quedado. Lo usa el servidor: así corre **las mismas reglas** que el
+ * juego (comprar, abrir sobres, premios…) sobre los personajes de cada cuenta. Al acabar, todo
+ * vuelve a estar como antes.
+ */
+export function conJugadores<T>(lista: unknown[], actual: string | null, fn: () => T): { resultado: T; jugadores: Player[]; actual: string | null } {
+  const antes = state
+  const claseAntes = getClaseActiva()
+  const cards = todasLasCartasDelJuego()
+  const jugadores = lista
+    .filter((p): p is Player => Boolean(p && typeof p === 'object' && typeof (p as Player).id === 'string'))
+    .map((p) => clean({ ...p, admin: false, clase: p.clase === 'todas' ? 'vaqueros' : p.clase }, cards))
+  const elegido = jugadores.find((p) => p.id === actual) ?? null
+  state = { players: jugadores, current: elegido?.id ?? '' }
+  setClaseActiva(elegido?.clase ?? 'vaqueros')
+  try {
+    const resultado = fn()
+    const quedan = state.players.filter((p) => p.id !== '')
+    return { resultado, jugadores: quedan, actual: state.current || null }
+  } finally {
+    state = antes
+    setClaseActiva(claseAntes)
+  }
 }

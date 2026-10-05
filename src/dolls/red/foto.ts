@@ -18,7 +18,7 @@ const ANGULOS = new Set(['heading', 'ang', 'dir', 'orb', 'a0'])
 /** Lo que es "de que bando". */
 const BANDOS = new Set(['side', 'winner'])
 /** Listas de dos (una por bando): se intercambian. */
-const POR_BANDO = new Set(['forts', 'hands', 'stunUntil', 'lastPlayAt', 'racha', 'rachaHasta', 'kills'])
+const POR_BANDO = new Set(['forts', 'hands', 'stunUntil', 'lastPlayAt', 'racha', 'rachaHasta', 'kills', 'muertes'])
 
 /** Da la vuelta a cualquier cosa de la partida (la foto entera o un aviso suelto). */
 export function espejo<T>(valor: T, clave = ''): T {

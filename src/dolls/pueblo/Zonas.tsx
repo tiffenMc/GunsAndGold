@@ -9,7 +9,8 @@ import { espera } from '../campo/CampoScreen'
 import { claseInfo } from '../game/clases'
 import { Avatar } from '../game/Avatar'
 import { hastaElCambio } from '../game/objetivos'
-import { cartasDeLaBaraja, cobrarObjetivo, deckProblem, objetivosDeHoy, usePlayer } from '../game/players'
+import { cartasDeLaBaraja, deckProblem, objetivosDeHoy, usePlayer } from '../game/players'
+import { hacer } from '../game/hacer'
 import { RANGOS, rangoDe } from '../game/progreso'
 import { SalaDeAmigos } from '../red/SalaDeAmigos'
 import type { PartidaConAmigo } from '../red/SalaDeAmigos'
@@ -280,9 +281,10 @@ export function TablonPanel({
                         <button
                           type="button"
                           onClick={() => {
-                            const premio = cobrarObjetivo(objetivo.id)
-                            if (!premio) return
-                            setCobro(premio.tipo === 'sobre' ? '¡Sobre conseguido! Ya lo tienes para abrirlo 📦' : `¡${premio.cantidad} monedas a la bolsa! 💰`)
+                            void hacer({ tipo: 'cobrar', objetivo: objetivo.id }).then(({ premio, error }) => {
+                              if (!premio) return setCobro(error ?? null)
+                              setCobro(premio.tipo === 'sobre' ? '¡Sobre conseguido! Ya lo tienes para abrirlo 📦' : `¡${premio.cantidad} monedas a la bolsa! 💰`)
+                            })
                           }}
                           className="boton mt-1 w-full py-1.5 text-[13px]"
                         >
